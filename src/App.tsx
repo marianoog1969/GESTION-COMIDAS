@@ -424,6 +424,24 @@ export default function App() {
     }
   };
 
+  const exportarPdf = async () => {
+    try {
+      const { informePdf, nombrePdf } = await import("./informePdf");
+      const ruta = await save({
+        defaultPath: nombrePdf(datos),
+        filters: [{ name: "PDF", extensions: ["pdf"] }],
+      });
+      if (typeof ruta !== "string") return;
+      const guardado = await invoke<string>("exportar_pdf", {
+        ruta,
+        contenido: Array.from(informePdf(datos)),
+      });
+      avisar({ tipo: "ok", texto: `Resumen PDF guardado en ${guardado}` });
+    } catch (err) {
+      avisar({ tipo: "error", texto: String(err) });
+    }
+  };
+
   const copiarPendientes = async () => {
     const ok = await copiar(textoPendientes(datos));
     avisar(
@@ -686,6 +704,13 @@ export default function App() {
             onClick={exportar}
           >
             ⬇ Exportar
+          </button>
+          <button
+            className="btn"
+            title="Generar un resumen completo en PDF"
+            onClick={exportarPdf}
+          >
+            📄 Resumen PDF
           </button>
           <button className="btn" title="Imprimir listado" onClick={() => window.print()}>
             🖨 Imprimir

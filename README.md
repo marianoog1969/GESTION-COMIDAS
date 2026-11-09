@@ -36,6 +36,7 @@ Desarrollo: `npm run tauri dev` (la base de datos se crea junto al ejecutable de
 
 - **📋 Copiar lista** (aparece al filtrar por «Pendientes»): copia al portapapeles quién falta por pagar y cuánto, con el total, listo para pegar en WhatsApp o en un correo.
 - **⬇ Exportar**: guarda un informe completo en **CSV** (resumen, participantes, gastos, traspasos y caja por cobrador). Se escribe con BOM UTF-8, separador `;` y decimales con coma, para que Excel en español lo abra bien con doble clic.
+- **📄 Resumen PDF**: genera un PDF completo (A4) con totales, menús, dinero de cada cobrador, participantes con su estado de pago, gastos y traspasos. Pide dónde guardarlo.
 - **🖨 Imprimir**: listado limpio de la pestaña abierta, con resumen al pie.
 
 ## Atajos de teclado

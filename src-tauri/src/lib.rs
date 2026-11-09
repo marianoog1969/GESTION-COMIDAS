@@ -1448,6 +1448,29 @@ fn exportar_csv(ruta: String, contenido: String) -> Res<String> {
     Ok(ruta.display().to_string())
 }
 
+/// Guarda el resumen en PDF generado por la interfaz.
+#[tauri::command(async)]
+fn exportar_pdf(ruta: String, contenido: Vec<u8>) -> Res<String> {
+    let ruta = PathBuf::from(ruta.trim());
+    if ruta.as_os_str().is_empty() {
+        return Err("Indica dónde guardar el archivo".into());
+    }
+    match ruta.extension().and_then(|x| x.to_str()) {
+        Some(x) if x.eq_ignore_ascii_case("pdf") => {}
+        _ => return Err("El archivo debe terminar en .pdf".into()),
+    }
+    if !contenido.starts_with(b"%PDF") {
+        return Err("El contenido generado no es un PDF válido".into());
+    }
+    match ruta.parent() {
+        Some(d) if d.as_os_str().is_empty() || d.is_dir() => {}
+        _ => return Err("La carpeta de destino no existe o no es accesible".into()),
+    }
+    std::fs::write(&ruta, contenido)
+        .map_err(|err| format!("No se ha podido guardar el archivo: {}", err))?;
+    Ok(ruta.display().to_string())
+}
+
 // ───────────────────────── Uso en varios equipos ─────────────────────────
 //
 // Todos ejecutan el mismo .exe desde una carpeta de red y comparten la base de datos
@@ -1837,6 +1860,7 @@ pub fn run() {
             eliminar_traspaso,
             restaurar_traspaso,
             exportar_csv,
+            exportar_pdf,
             info_db,
             reconectar,
             sondeo,
