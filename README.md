@@ -112,3 +112,7 @@ Ejecutar desde la red en Windows:
 ### Datos de versiones anteriores
 
 Hasta la v0.3 los datos se guardaban en cada equipo (`%APPDATA%\<identificador>\celebracion.db`). Si un equipo tiene esa base con personas y la compartida está vacía, al abrir el programa se ofrece **importarla** una sola vez (precios, contraseña, cobradores y participantes con su estado de pago). El archivo antiguo no se borra: se renombra a `celebracion-antigua-importada.db` o `celebracion-antigua-sin-importar.db`.
+
+## Licencia
+
+© 2026 Mariano Ortuño. Software libre bajo la licencia [GNU GPL v3 o posterior](LICENSE).

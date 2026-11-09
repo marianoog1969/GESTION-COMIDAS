@@ -2,6 +2,8 @@
 name = "celebracion"
 version = "0.8.0"
 description = "Gestión de comida de celebración y regalo"
+authors = ["Mariano Ortuño"]
+license = "GPL-3.0-or-later"
 edition = "2021"
 
 [lib]

@@ -2,6 +2,8 @@
   "name": "celebracion",
   "private": true,
   "version": "0.8.0",
+  "author": "Mariano Ortuño",
+  "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "dev": "vite",
