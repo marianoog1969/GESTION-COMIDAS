@@ -108,6 +108,20 @@ struct Participante {
     /// "efectivo" o "bizum" (solo si ha pagado)
     #[serde(default)]
     metodo: Option<String>,
+    /// Tipo de menú elegido (solo si tiene comida)
+    #[serde(default)]
+    menu_id: Option<i64>,
+    #[serde(default)]
+    menu: Option<String>,
+}
+
+/// Tipo de menú configurable (solo nombre, sin precio).
+#[derive(Serialize, Clone)]
+struct Menu {
+    id: i64,
+    nombre: String,
+    /// Personas que lo han elegido
+    personas: i64,
 }
 
 /// Gasto del regalo pagado por un cobrador con el dinero recogido.
@@ -198,6 +212,7 @@ struct Datos {
     cobradores: Vec<CobradorResumen>,
     gastos: Vec<Gasto>,
     traspasos: Vec<Traspaso>,
+    menus: Vec<Menu>,
 }
 
 #[derive(Serialize)]
@@ -224,6 +239,10 @@ fn init_db(c: &Connection) -> rusqlite::Result<()> {
             importe_regalo INTEGER
          );
          CREATE TABLE IF NOT EXISTS cobradores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS menus (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT NOT NULL
          );
@@ -259,7 +278,7 @@ fn init_db(c: &Connection) -> rusqlite::Result<()> {
             columnas.push(n?);
         }
     }
-    for (col, tipo) in [("cobrador_id", "INTEGER"), ("metodo_pago", "TEXT")] {
+    for (col, tipo) in [("cobrador_id", "INTEGER"), ("metodo_pago", "TEXT"), ("menu_id", "INTEGER")] {
         if !columnas.iter().any(|x| x == col) {
             c.execute(
                 &format!("ALTER TABLE participantes ADD COLUMN {} {}", col, tipo),
@@ -287,7 +306,7 @@ fn abrir_db(ruta: &Path, crear: bool) -> Res<Connection> {
         let filas = st.query_map([], |r| r.get::<_, String>(0)).map_err(e)?;
         filas.collect::<Result<_, _>>().map_err(e)?
     };
-    let propias = ["config", "participantes", "cobradores", "gastos", "traspasos", "presencia", "sqlite_sequence"];
+    let propias = ["config", "participantes", "cobradores", "gastos", "traspasos", "menus", "presencia", "sqlite_sequence"];
     if !tablas.is_empty() && !tablas.iter().any(|t| t == "participantes") {
         return Err("Ese archivo no es una base de datos de Celebración".into());
     }
@@ -339,8 +358,13 @@ fn leer_config(c: &Connection) -> Config {
     }
 }
 
+/// Regalo de esta persona: el suyo propio si se ha fijado, o el precio general.
+fn regalo_de(p: &Participante, cfg: &Config) -> i64 {
+    p.importe_regalo.unwrap_or(cfg.precio_regalo)
+}
+
 fn debe_de(p: &Participante, cfg: &Config) -> i64 {
-    let regalo = cfg.precio_regalo;
+    let regalo = regalo_de(p, cfg);
     regalo + if p.comida { cfg.precio_comida } else { 0 }
 }
 
@@ -348,8 +372,9 @@ fn leer_participantes(c: &Connection, cfg: &Config) -> Res<Vec<Participante>> {
     let mut st = c
         .prepare(
             "SELECT p.id,p.nombre,p.comida,p.pagado,p.fecha_pago,p.notas,p.importe_regalo,
-                    p.cobrador_id,c.nombre,p.metodo_pago
+                    p.cobrador_id,c.nombre,p.metodo_pago,p.menu_id,m.nombre
              FROM participantes p LEFT JOIN cobradores c ON c.id=p.cobrador_id
+                                  LEFT JOIN menus m ON m.id=p.menu_id
              ORDER BY p.nombre COLLATE NOCASE",
         )
         .map_err(e)?;
@@ -367,6 +392,8 @@ fn leer_participantes(c: &Connection, cfg: &Config) -> Res<Vec<Participante>> {
                 cobrador_id: r.get(7)?,
                 cobrador: r.get(8)?,
                 metodo: r.get(9)?,
+                menu_id: r.get(10)?,
+                menu: r.get(11)?,
             })
         })
         .map_err(e)?;
@@ -380,7 +407,7 @@ fn leer_participantes(c: &Connection, cfg: &Config) -> Res<Vec<Participante>> {
 fn calcular_resumen(ps: &[Participante], cfg: &Config) -> Resumen {
     let mut r = Resumen::default();
     for p in ps {
-        let regalo = cfg.precio_regalo;
+        let regalo = regalo_de(p, cfg);
         let comida = if p.comida { cfg.precio_comida } else { 0 };
         r.total_personas += 1;
         if p.comida {
@@ -658,6 +685,7 @@ fn cargar(s: State<AppState>) -> Res<Datos> {
     let participantes = leer_participantes(&tx, &config)?;
     let gastos = leer_gastos(&tx)?;
     let traspasos = leer_traspasos(&tx)?;
+    let menus = leer_menus(&tx)?;
     let mut resumen = calcular_resumen(&participantes, &config);
     aplicar_movimientos(&mut resumen, &gastos, &traspasos);
     let cobradores = calcular_cobradores(&tx, &participantes, &gastos, &traspasos)?;
@@ -669,7 +697,96 @@ fn cargar(s: State<AppState>) -> Res<Datos> {
         cobradores,
         gastos,
         traspasos,
+        menus,
     })
+}
+
+fn leer_menus(c: &Connection) -> Res<Vec<Menu>> {
+    let mut st = c
+        .prepare(
+            "SELECT m.id,m.nombre,
+                    (SELECT COUNT(*) FROM participantes p WHERE p.menu_id=m.id AND p.comida=1)
+             FROM menus m ORDER BY m.nombre COLLATE NOCASE",
+        )
+        .map_err(e)?;
+    let v = st
+        .query_map([], |r| {
+            Ok(Menu {
+                id: r.get(0)?,
+                nombre: r.get(1)?,
+                personas: r.get(2)?,
+            })
+        })
+        .map_err(e)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(e)?;
+    Ok(v)
+}
+
+#[tauri::command(async)]
+fn guardar_menu(s: State<AppState>, nombre: String) -> Res<()> {
+    exigir_admin(&s)?;
+    let nombre = nombre.trim().to_string();
+    if nombre.is_empty() {
+        return Err("El nombre del menú es obligatorio".into());
+    }
+    let g = s.db.lock().map_err(e)?;
+    let db = tx_escritura(con(&g)?)?;
+    let existe: i64 = db
+        .query_row(
+            "SELECT COUNT(*) FROM menus WHERE nombre=?1 COLLATE NOCASE",
+            params![nombre],
+            |r| r.get(0),
+        )
+        .map_err(e)?;
+    if existe > 0 {
+        return Err("Ya existe un menú con ese nombre".into());
+    }
+    db.execute("INSERT INTO menus(nombre) VALUES(?1)", params![nombre])
+        .map_err(e)?;
+    db.commit().map_err(e)?;
+    Ok(())
+}
+
+#[tauri::command(async)]
+fn eliminar_menu(s: State<AppState>, id: i64) -> Res<()> {
+    exigir_admin(&s)?;
+    let g = s.db.lock().map_err(e)?;
+    let db = tx_escritura(con(&g)?)?;
+    let n: i64 = db
+        .query_row(
+            "SELECT COUNT(*) FROM participantes WHERE menu_id=?1",
+            params![id],
+            |r| r.get(0),
+        )
+        .map_err(e)?;
+    if n > 0 {
+        return Err(format!(
+            "No se puede eliminar: {} persona(s) tienen este menú. Cámbiales el menú primero.",
+            n
+        ));
+    }
+    db.execute("DELETE FROM menus WHERE id=?1", params![id])
+        .map_err(e)?;
+    db.commit().map_err(e)?;
+    Ok(())
+}
+
+/// Comprueba que el menú existe (otro equipo pudo eliminarlo). None = sin menú.
+fn menu_valido(c: &Connection, menu_id: Option<i64>) -> Res<Option<i64>> {
+    match menu_id {
+        Some(m) => {
+            let n: i64 = c
+                .query_row("SELECT COUNT(*) FROM menus WHERE id=?1", params![m], |r| r.get(0))
+                .map_err(e)?;
+            if n == 0 {
+                Err("Ese menú ya no existe (lo ha eliminado otro equipo)".into())
+            } else {
+                Ok(Some(m))
+            }
+        }
+        None => Ok(None),
+    }
 }
 
 #[tauri::command(async)]
@@ -754,17 +871,23 @@ fn guardar_participante(s: State<AppState>, participante: Participante) -> Res<(
     }
     let g = s.db.lock().map_err(e)?;
     let db = con(&g)?;
+    let menu = if participante.comida {
+        menu_valido(db, participante.menu_id)?
+    } else {
+        None
+    };
     match participante.id {
         Some(id) => {
             let n = db
                 .execute(
-                    "UPDATE participantes SET nombre=?1, comida=?2, notas=?3, importe_regalo=?4 WHERE id=?5",
+                    "UPDATE participantes SET nombre=?1, comida=?2, notas=?3, importe_regalo=?4, menu_id=?6 WHERE id=?5",
                     params![
                         nombre,
                         participante.comida as i64,
                         participante.notas.trim(),
                         participante.importe_regalo,
-                        id
+                        id,
+                        menu
                     ],
                 )
                 .map_err(e)?;
@@ -774,12 +897,13 @@ fn guardar_participante(s: State<AppState>, participante: Participante) -> Res<(
         }
         None => {
             db.execute(
-                "INSERT INTO participantes(nombre,comida,notas,importe_regalo) VALUES(?1,?2,?3,?4)",
+                "INSERT INTO participantes(nombre,comida,notas,importe_regalo,menu_id) VALUES(?1,?2,?3,?4,?5)",
                 params![
                     nombre,
                     participante.comida as i64,
                     participante.notas.trim(),
-                    participante.importe_regalo
+                    participante.importe_regalo,
+                    menu
                 ],
             )
             .map_err(e)?;
@@ -799,25 +923,42 @@ fn actualizar_participante(
     nombre: Option<String>,
     comida: Option<bool>,
     notas: Option<String>,
+    // 0 = quitar el menú
+    menu_id: Option<i64>,
+    // Céntimos; -1 = volver al regalo general
+    importe_regalo: Option<i64>,
 ) -> Res<()> {
     let nombre = nombre.map(|n| n.trim().to_string());
     if nombre.as_deref() == Some("") {
         return Err("El nombre es obligatorio".into());
     }
+    if matches!(importe_regalo, Some(i) if i < -1) {
+        return Err("El importe no puede ser negativo".into());
+    }
     let g = s.db.lock().map_err(e)?;
     let db = con(&g)?;
+    menu_valido(db, menu_id.filter(|m| *m > 0))?;
     let n = db
         .execute(
             "UPDATE participantes
              SET nombre=COALESCE(?2, nombre),
                  comida=COALESCE(?3, comida),
-                 notas=COALESCE(?4, notas)
+                 notas=COALESCE(?4, notas),
+                 menu_id=CASE WHEN ?3=0 THEN NULL
+                              WHEN ?5 IS NULL THEN menu_id
+                              WHEN ?5=0 THEN NULL
+                              ELSE ?5 END,
+                 importe_regalo=CASE WHEN ?6 IS NULL THEN importe_regalo
+                                     WHEN ?6<0 THEN NULL
+                                     ELSE ?6 END
              WHERE id=?1",
             params![
                 id,
                 nombre,
                 comida.map(|c| c as i64),
-                notas.map(|n| n.trim().to_string())
+                notas.map(|n| n.trim().to_string()),
+                menu_id,
+                importe_regalo
             ],
         )
         .map_err(e)?;
@@ -944,6 +1085,11 @@ fn restaurar_participante(s: State<AppState>, participante: Participante) -> Res
         None => None,
     };
     let pagado = participante.pagado;
+    let menu_id = if participante.comida {
+        menu_valido(&db, participante.menu_id).unwrap_or(None)
+    } else {
+        None
+    };
     let ocupado: i64 = match participante.id {
         Some(id) => db
             .query_row(
@@ -956,8 +1102,8 @@ fn restaurar_participante(s: State<AppState>, participante: Participante) -> Res
     };
     let id = if ocupado == 0 { participante.id } else { None };
     db.execute(
-        "INSERT INTO participantes(id,nombre,comida,pagado,fecha_pago,notas,importe_regalo,cobrador_id,metodo_pago)
-         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+        "INSERT INTO participantes(id,nombre,comida,pagado,fecha_pago,notas,importe_regalo,cobrador_id,metodo_pago,menu_id)
+         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
         params![
             id,
             nombre,
@@ -967,7 +1113,8 @@ fn restaurar_participante(s: State<AppState>, participante: Participante) -> Res
             participante.notas.trim(),
             participante.importe_regalo,
             if pagado { cobrador_id } else { None },
-            if pagado { participante.metodo.clone() } else { None }
+            if pagado { participante.metodo.clone() } else { None },
+            menu_id
         ],
     )
     .map_err(e)?;
@@ -1361,6 +1508,7 @@ fn bd_vacia(c: &Connection) -> Res<bool> {
                   + (SELECT COUNT(*) FROM cobradores)
                   + (SELECT COUNT(*) FROM gastos)
                   + (SELECT COUNT(*) FROM traspasos)
+                  + (SELECT COUNT(*) FROM menus)
                   + (SELECT COUNT(*) FROM config)",
             [],
             |r| r.get(0),
@@ -1673,6 +1821,8 @@ pub fn run() {
             guardar_config,
             guardar_cobrador,
             eliminar_cobrador,
+            guardar_menu,
+            eliminar_menu,
             guardar_participante,
             actualizar_participante,
             marcar_pagado,
@@ -1836,6 +1986,36 @@ mod tests {
         assert_eq!((n.as_str(), cob.as_str()), ("Ana", "Carmen"));
         assert_eq!(leer_config(&db).precio_comida, 3500);
         assert!(!bd_vacia(&db).unwrap());
+    }
+
+    #[test]
+    fn regalo_propio_y_menus() {
+        let ruta = tmp("menus.db");
+        let c = abrir_db(&ruta, true).unwrap();
+        set_key(&c, "precio_comida", "3000").unwrap();
+        set_key(&c, "precio_regalo", "1000").unwrap();
+        c.execute_batch(
+            "INSERT INTO menus(id,nombre) VALUES(1,'Carne'),(2,'Pescado');
+             INSERT INTO participantes(nombre,comida,pagado,menu_id,importe_regalo) VALUES
+               ('Ana',1,1,1,NULL),
+               ('Luis',1,0,2,2500),
+               ('Eva',0,0,NULL,500);",
+        )
+        .unwrap();
+        let cfg = leer_config(&c);
+        let ps = leer_participantes(&c, &cfg).unwrap();
+        let por = |n: &str| ps.iter().find(|p| p.nombre == n).unwrap();
+        assert_eq!(por("Ana").debe, 4000);
+        assert_eq!(por("Luis").debe, 5500); // 30 + regalo propio de 25
+        assert_eq!(por("Eva").debe, 500); // solo regalo, 5 €
+        assert_eq!(por("Luis").menu.as_deref(), Some("Pescado"));
+        let r = calcular_resumen(&ps, &cfg);
+        assert_eq!(r.total_regalo, 1000 + 2500 + 500);
+        assert_eq!(r.total_esperado, 4000 + 5500 + 500);
+        assert_eq!(r.cobrado, 4000);
+        assert_eq!(r.pendiente, 6000);
+        let menus = leer_menus(&c).unwrap();
+        assert_eq!(menus.iter().find(|m| m.id == 2).unwrap().personas, 1);
     }
 
     #[test]

@@ -18,6 +18,14 @@ export interface Participante {
   cobrador_id: number | null;
   cobrador: string | null;
   metodo: string | null; // "efectivo" | "bizum"
+  menu_id: number | null;
+  menu: string | null;
+}
+
+export interface Menu {
+  id: number;
+  nombre: string;
+  personas: number;
 }
 
 export interface Cobrador {
@@ -90,6 +98,7 @@ export interface Datos {
   cobradores: Cobrador[];
   gastos: Gasto[];
   traspasos: Traspaso[];
+  menus: Menu[];
 }
 
 export interface Estado {

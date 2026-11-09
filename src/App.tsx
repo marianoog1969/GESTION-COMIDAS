@@ -7,6 +7,7 @@ import {
   Datos,
   Estado,
   InfoDb,
+  Menu,
   Migracion,
   Participante,
   Sondeo,
@@ -14,6 +15,7 @@ import {
   deCentimos,
   eur,
   fmtFecha,
+  hoy,
   normalizar,
 } from "./types";
 import AboutDialog from "./components/AboutDialog";
@@ -487,7 +489,7 @@ export default function App() {
 
   const cambiarCobro = (
     p: Participante,
-    cambios: { cobradorId?: number; metodo?: string }
+    cambios: { cobradorId?: number; metodo?: string; fecha?: string }
   ) => {
     const cobradorId =
       reales.length === 0
@@ -500,7 +502,7 @@ export default function App() {
         pagado: true,
         cobradorId,
         metodo,
-        fecha: p.fecha_pago,
+        fecha: cambios.fecha ?? p.fecha_pago,
       })
     );
   };
@@ -508,7 +510,13 @@ export default function App() {
   /** Guarda solo los campos cambiados, para no pisar lo que otro equipo edite a la vez. */
   const guardarFila = (
     p: Participante,
-    cambios: { nombre?: string; comida?: boolean; notas?: string }
+    cambios: {
+      nombre?: string;
+      comida?: boolean;
+      notas?: string;
+      menuId?: number; // 0 = sin menú
+      importeRegalo?: number; // céntimos; -1 = regalo general
+    }
   ) => {
     resaltar("p" + p.id);
     return ejecutar(() =>
@@ -517,8 +525,20 @@ export default function App() {
         nombre: cambios.nombre ?? null,
         comida: cambios.comida ?? null,
         notas: cambios.notas ?? null,
+        menuId: cambios.menuId ?? null,
+        importeRegalo: cambios.importeRegalo ?? null,
       })
     );
+  };
+
+  /** Valor del selector de modalidad: «regalo», «comida» (sin menú) o «m:ID». */
+  const modalidadDe = (p: Participante) =>
+    !p.comida ? "regalo" : p.menu_id ? `m:${p.menu_id}` : "comida";
+
+  const cambiarModalidad = (p: Participante, v: string) => {
+    if (v === "regalo") return guardarFila(p, { comida: false });
+    if (v === "comida") return guardarFila(p, { comida: true, menuId: 0 });
+    return guardarFila(p, { comida: true, menuId: Number(v.slice(2)) });
   };
 
   const anadir = (p: Partial<Participante>) =>
@@ -537,6 +557,8 @@ export default function App() {
             cobrador_id: null,
             cobrador: null,
             metodo: null,
+            menu_id: null,
+            menu: null,
             ...p,
           },
         }),
@@ -999,6 +1021,7 @@ export default function App() {
               {cabecera("estado", "Estado", "c-estado")}
               {cabecera("nombre", "Nombre")}
               <th>Modalidad</th>
+              <th className="num">Regalo</th>
               {cabecera("importe", "Importe", "num")}
               {cabecera("cobro", "Cobro")}
               <th>Notas</th>
@@ -1010,12 +1033,13 @@ export default function App() {
               inputRef={nuevoRef}
               precioRegalo={config.precio_regalo}
               precioComida={config.precio_comida}
+              menus={datos.menus}
               nombres={datos.participantes.map((p) => p.nombre)}
               onAdd={anadir}
             />
             {lista.length === 0 && (
               <tr>
-                <td colSpan={7} className="empty">
+                <td colSpan={8} className="empty">
                   {datos.participantes.length === 0 ? (
                     <>
                       <div className="empty-ico">🎉</div>
@@ -1081,22 +1105,54 @@ export default function App() {
                   <select
                     className={"inline tag-select " + (p.comida ? "t-full" : "t-gift")}
                     aria-label="Modalidad"
-                    value={p.comida ? "comida" : "regalo"}
-                    onChange={(ev) =>
-                      guardarFila(p, { comida: ev.target.value === "comida" })
-                    }
+                    value={modalidadDe(p)}
+                    onChange={(ev) => cambiarModalidad(p, ev.target.value)}
                   >
-                    <option value="comida">🍽 Comida + regalo</option>
+                    {datos.menus.length === 0 || (p.comida && !p.menu_id) ? (
+                      <option value="comida">
+                        🍽 {datos.menus.length === 0 ? "Comida + regalo" : "Comida (elegir menú)"}
+                      </option>
+                    ) : null}
+                    {datos.menus.map((m) => (
+                      <option key={m.id} value={`m:${m.id}`}>
+                        🍽 {m.nombre} + regalo
+                      </option>
+                    ))}
                     <option value="regalo">🎁 Solo regalo</option>
                   </select>
+                </td>
+                <td className="num c-regalo">
+                  <CeldaTexto
+                    valor={deCentimos(p.importe_regalo ?? config.precio_regalo)}
+                    inputMode="decimal"
+                    etiqueta="Regalo de esta persona"
+                    clase={p.importe_regalo !== null ? "custom" : ""}
+                    validar={(t) => aCentimos(t) !== null}
+                    onCommit={(v) => {
+                      const c = aCentimos(v);
+                      if (c === null) return;
+                      guardarFila(p, {
+                        importeRegalo: c === config.precio_regalo ? -1 : c,
+                      });
+                    }}
+                  />
                 </td>
                 <td className="num importe">{eur(p.debe)}</td>
                 <td className="c-cobro">
                   {p.pagado ? (
                     <div className="cobro">
-                      <span className="fecha" title="Fecha de cobro">
-                        {fmtFecha(p.fecha_pago)}
-                      </span>
+                      <span className="fecha print-only">{fmtFecha(p.fecha_pago)}</span>
+                      <input
+                        type="date"
+                        className="cell fecha-edit no-print"
+                        title="Fecha de cobro (editable)"
+                        aria-label="Fecha de cobro"
+                        value={p.fecha_pago ?? ""}
+                        max={hoy()}
+                        onChange={(ev) =>
+                          ev.target.value && cambiarCobro(p, { fecha: ev.target.value })
+                        }
+                      />
                       {reales.length > 0 && (
                         <CeldaSelect
                           valor={p.cobrador_id}
@@ -1228,6 +1284,7 @@ export default function App() {
 
       {modal === "config" && (
         <ConfigDialog
+          menus={datos.menus}
           config={config}
           cobradores={reales}
           onChanged={refrescar}
@@ -1496,11 +1553,13 @@ function CambiarPassword(props: {
 function ConfigDialog(props: {
   config: Datos["config"];
   cobradores: Cobrador[];
+  menus: Menu[];
   onChanged: () => Promise<void>;
   onCancel: () => void;
   onSave: (c: Datos["config"]) => Promise<void>;
 }) {
   const [nuevoCobrador, setNuevoCobrador] = useState("");
+  const [nuevoMenu, setNuevoMenu] = useState("");
   const [evento, setEvento] = useState(props.config.evento);
   const [fecha, setFecha] = useState(props.config.fecha);
   const [regaloDesc, setRegaloDesc] = useState(props.config.regalo_desc);
@@ -1528,6 +1587,28 @@ function ConfigDialog(props: {
       setErr("");
       await invoke("guardar_cobrador", { nombre: nuevoCobrador });
       setNuevoCobrador("");
+      await props.onChanged();
+    } catch (e) {
+      setErr(String(e));
+    }
+  };
+
+  const anadirMenu = async () => {
+    if (!nuevoMenu.trim()) return;
+    try {
+      setErr("");
+      await invoke("guardar_menu", { nombre: nuevoMenu });
+      setNuevoMenu("");
+      await props.onChanged();
+    } catch (e) {
+      setErr(String(e));
+    }
+  };
+
+  const quitarMenu = async (m: Menu) => {
+    try {
+      setErr("");
+      await invoke("eliminar_menu", { id: m.id });
       await props.onChanged();
     } catch (e) {
       setErr(String(e));
@@ -1615,7 +1696,7 @@ function ConfigDialog(props: {
           </div>
         </label>
         <label>
-          Regalo (igual para todos)
+          Regalo (general; cada persona puede tener otro)
           <div className={"money" + (pr === null && regalo.trim() ? " invalid" : "")}>
             <input
               inputMode="decimal"
@@ -1634,6 +1715,56 @@ function ConfigDialog(props: {
           regalo
         </div>
       )}
+
+      <h3 className="sub">Tipos de menú</h3>
+      <p className="muted">
+        Opciones de menú entre las que elegir al apuntar a cada persona (sin precio: la comida
+        cuesta lo mismo). Se guardan al momento.
+      </p>
+      <div className="chips">
+        {props.menus.length === 0 && <span className="muted">Aún no hay menús.</span>}
+        {props.menus.map((m) => (
+          <span key={m.id} className="chip-x">
+            🍽 {m.nombre}
+            {m.personas > 0 && (
+              <span className="muted">
+                {" "}
+                · {m.personas} {m.personas === 1 ? "persona" : "personas"}
+              </span>
+            )}
+            <button
+              type="button"
+              aria-label={`Eliminar menú ${m.nombre}`}
+              title={m.personas > 0 ? "Hay personas con este menú" : "Eliminar"}
+              disabled={m.personas > 0}
+              onClick={() => quitarMenu(m)}
+            >
+              ✕
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="addrow">
+        <input
+          placeholder="Ej.: Carne, Pescado, Vegetariano"
+          value={nuevoMenu}
+          onChange={(ev) => setNuevoMenu(ev.target.value)}
+          onKeyDown={(ev) => {
+            if (ev.key === "Enter") {
+              ev.preventDefault();
+              anadirMenu();
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="btn"
+          disabled={!nuevoMenu.trim()}
+          onClick={anadirMenu}
+        >
+          ＋ Añadir
+        </button>
+      </div>
 
       <h3 className="sub">Cobradores</h3>
       <p className="muted">
@@ -1710,12 +1841,14 @@ function FilaNueva(props: {
   inputRef: React.RefObject<HTMLInputElement>;
   precioRegalo: number;
   precioComida: number;
+  menus: Menu[];
   nombres: string[];
   onAdd: (p: Partial<Participante>) => Promise<boolean>;
 }) {
   const [nombre, setNombre] = useState("");
-  const [comida, setComida] = useState(true);
+  const [modalidad, setModalidad] = useState("comida");
   const [notas, setNotas] = useState("");
+  const comida = modalidad !== "regalo";
   const [ocupado, setOcupado] = useState(false);
 
   const debe = props.precioRegalo + (comida ? props.precioComida : 0);
@@ -1726,7 +1859,12 @@ function FilaNueva(props: {
   const anadir = async () => {
     if (!nombre.trim() || ocupado) return;
     setOcupado(true);
-    const ok = await props.onAdd({ nombre: nombre.trim(), comida, notas });
+    const ok = await props.onAdd({
+      nombre: nombre.trim(),
+      comida,
+      menu_id: modalidad.startsWith("m:") ? Number(modalidad.slice(2)) : null,
+      notas,
+    });
     setOcupado(false);
     if (ok) {
       setNombre("");
@@ -1755,13 +1893,20 @@ function FilaNueva(props: {
         <select
           className={"inline tag-select " + (comida ? "t-full" : "t-gift")}
           aria-label="Modalidad de la nueva persona"
-          value={comida ? "comida" : "regalo"}
-          onChange={(ev) => setComida(ev.target.value === "comida")}
+          value={modalidad}
+          onChange={(ev) => setModalidad(ev.target.value)}
         >
-          <option value="comida">🍽 Comida + regalo</option>
+          {props.menus.length === 0 && <option value="comida">🍽 Comida + regalo</option>}
+          {props.menus.length > 0 && <option value="comida">🍽 Comida (elegir menú)</option>}
+          {props.menus.map((m) => (
+            <option key={m.id} value={`m:${m.id}`}>
+              🍽 {m.nombre} + regalo
+            </option>
+          ))}
           <option value="regalo">🎁 Solo regalo</option>
         </select>
       </td>
+      <td></td>
       <td className="num muted">{eur(debe)}</td>
       <td></td>
       <td className="c-notas">

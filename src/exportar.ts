@@ -41,12 +41,14 @@ export function informeCsv(d: Datos): string {
   L.push("");
 
   L.push(fila("PARTICIPANTES"));
-  L.push(fila("Nombre", "Modalidad", "Importe", "Estado", "Fecha de pago", "Cobrado por", "Método", "Notas"));
+  L.push(fila("Nombre", "Modalidad", "Menú", "Regalo", "Importe", "Estado", "Fecha de pago", "Cobrado por", "Método", "Notas"));
   for (const p of d.participantes) {
     L.push(
       fila(
         p.nombre,
         p.comida ? "Comida + regalo" : "Solo regalo",
+        p.menu ?? "",
+        num(p.importe_regalo ?? d.config.precio_regalo),
         num(p.debe),
         p.pagado ? "Pagado" : "Pendiente",
         fmtFecha(p.fecha_pago),
@@ -56,8 +58,16 @@ export function informeCsv(d: Datos): string {
       )
     );
   }
-  L.push(fila("TOTAL", "", num(r.total_esperado), `${r.pagados} pagados / ${r.pendientes} pendientes`, "", "", "", ""));
+  L.push(fila("TOTAL", "", "", "", num(r.total_esperado), `${r.pagados} pagados / ${r.pendientes} pendientes`, "", "", "", ""));
   L.push("");
+  if (d.menus.length > 0) {
+    L.push(fila("MENÚS"));
+    L.push(fila("Menú", "Personas"));
+    for (const m of d.menus) L.push(fila(m.nombre, String(m.personas)));
+    const sin = d.participantes.filter((p) => p.comida && !p.menu_id).length;
+    if (sin > 0) L.push(fila("(sin elegir)", String(sin)));
+    L.push("");
+  }
 
   if (d.gastos.length > 0) {
     L.push(fila("GASTOS DEL REGALO"));
