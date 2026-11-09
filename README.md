@@ -34,7 +34,7 @@ Un mismo programa sirve para varios eventos a la vez, cada uno con su propia bas
 
 - **Eventos** (botón de la barra superior): lista los eventos disponibles con el número de personas y de pagos. **Abrir aparte** lo abre en una ventana nueva y mantiene la actual (así se ven varios a la vez); **Cambiar a este** cierra la ventana actual y abre ese evento.
 - **Nuevo evento**: se escribe el nombre y se crea un archivo en la subcarpeta `Eventos`, junto a la base de datos principal; se abre en una ventana nueva.
-- La base de datos de siempre (`celebracion.db`) es el evento **Principal**; no se pierde ni se modifica.
+- La base de datos de siempre (`celebracion.db`) es el evento **Principal**; no se pierde ni se modifica. Si se quiere, en **Eventos → Pasar la base actual a Eventos** (solo administrador) se mueve a la carpeta `Eventos` con el nombre que se indique; el programa se reabre con ella. Antes hay que cerrar el programa en los demás equipos: si alguno la tiene abierta, no se mueve nada.
 - Cada equipo recuerda el último evento que abrió y lo vuelve a abrir al arrancar. Los demás equipos ven los mismos eventos si ejecutan el programa desde la misma carpeta.
 - Para abrir un evento concreto directamente (acceso directo): `celebracion.exe --db "\\servidor\carpeta\Eventos\Navidad.db"`.
 - El título de la ventana muestra el nombre del evento.

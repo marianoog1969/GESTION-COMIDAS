@@ -1355,7 +1355,7 @@ export default function App() {
         />
       )}
 
-      {modal === "eventos" && <EventosDialog onCancel={() => setModal(null)} />}
+      {modal === "eventos" && <EventosDialog onCancel={() => setModal(null)} admin={estado.desbloqueado} />}
 
       {modal === "about" && <AboutDialog onClose={() => setModal(null)} />}
 

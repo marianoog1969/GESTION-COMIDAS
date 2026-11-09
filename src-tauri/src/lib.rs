@@ -47,6 +47,8 @@ struct AppState {
     admin: Mutex<bool>,
     ultimo_latido: Mutex<Option<Instant>>,
     error_conexion: Mutex<Option<String>>,
+    /// Verdadero mientras se mueve la base principal: no se debe reconectar ni crear otra
+    moviendo: std::sync::atomic::AtomicBool,
 }
 
 fn con<'a>(g: &'a MutexGuard<Option<Connection>>) -> Res<&'a Connection> {
@@ -1761,6 +1763,24 @@ fn listar_eventos(s: State<AppState>) -> Res<Vec<EventoInfo>> {
     Ok(v)
 }
 
+/// Ruta de un archivo de evento nuevo: nombre sin caracteres no permitidos en Windows y,
+/// si ya existe, con " (1)", " (2)"...
+fn ruta_libre_evento(dir: &Path, nombre: &str) -> PathBuf {
+    let limpio: String = nombre
+        .chars()
+        .filter(|c| !c.is_control() && !"\\/:*?\"<>|".contains(*c))
+        .collect();
+    let limpio = limpio.trim().trim_matches('.').trim().to_string();
+    let limpio = if limpio.is_empty() { "evento".to_string() } else { limpio };
+    let mut ruta = dir.join(format!("{}.db", limpio));
+    let mut n = 1;
+    while ruta.exists() {
+        ruta = dir.join(format!("{} ({}).db", limpio, n));
+        n += 1;
+    }
+    ruta
+}
+
 /// Crea un evento nuevo (archivo .db vacío en la carpeta «Eventos») y devuelve su ruta.
 #[tauri::command(async)]
 fn crear_evento(s: State<AppState>, nombre: String) -> Res<String> {
@@ -1768,12 +1788,6 @@ fn crear_evento(s: State<AppState>, nombre: String) -> Res<String> {
     if nombre.is_empty() {
         return Err("El nombre del evento es obligatorio".into());
     }
-    let limpio: String = nombre
-        .chars()
-        .filter(|c| !c.is_control() && !"\\/:*?\"<>|".contains(*c))
-        .collect();
-    let limpio = limpio.trim().trim_matches('.').trim().to_string();
-    let limpio = if limpio.is_empty() { "evento".to_string() } else { limpio };
     std::fs::create_dir_all(&s.dir_eventos).map_err(|err| {
         format!(
             "No se puede crear la carpeta de eventos ({}): {}",
@@ -1781,12 +1795,7 @@ fn crear_evento(s: State<AppState>, nombre: String) -> Res<String> {
             err
         )
     })?;
-    let mut ruta = s.dir_eventos.join(format!("{}.db", limpio));
-    let mut n = 1;
-    while ruta.exists() {
-        ruta = s.dir_eventos.join(format!("{} ({}).db", limpio, n));
-        n += 1;
-    }
+    let ruta = ruta_libre_evento(&s.dir_eventos, &nombre);
     let c = abrir_db(&ruta, true)?;
     set_key(&c, "evento", &nombre)?;
     drop(c);
@@ -1838,6 +1847,72 @@ fn titulo_ventana(app: tauri::AppHandle, titulo: String) -> Res<()> {
     Ok(())
 }
 
+/// Pasa la base principal a la carpeta de eventos con el nombre indicado y la abre allí.
+/// Falla (sin cambiar nada) si otro equipo la tiene abierta.
+#[tauri::command(async)]
+fn mover_a_eventos(app: tauri::AppHandle, s: State<AppState>, nombre: String) -> Res<String> {
+    use std::sync::atomic::Ordering;
+    exigir_admin(&s)?;
+    if !mismo_archivo(&s.ruta, &s.principal) {
+        return Err("Solo se puede mover la base principal; esta ventana tiene abierto otro evento".into());
+    }
+    let nombre = nombre.trim().to_string();
+    if nombre.is_empty() {
+        return Err("El nombre es obligatorio".into());
+    }
+    std::fs::create_dir_all(&s.dir_eventos).map_err(|err| {
+        format!(
+            "No se puede crear la carpeta de eventos ({}): {}",
+            s.dir_eventos.display(),
+            err
+        )
+    })?;
+    let destino = ruta_libre_evento(&s.dir_eventos, &nombre);
+    s.moviendo.store(true, Ordering::SeqCst);
+    // Poner el nombre, dejar de figurar como conectado y cerrar la conexión propia
+    {
+        let mut g = s.db.lock().map_err(e)?;
+        if let Some(c) = g.as_ref() {
+            let _ = set_key(c, "evento", &nombre);
+            let (eq, us) = identidad();
+            let _ = c.execute(
+                "DELETE FROM presencia WHERE clave=?1",
+                params![format!("{}|{}", eq, us)],
+            );
+            let _ = c.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()));
+        }
+        *g = None;
+    }
+    if let Err(err) = std::fs::rename(&s.ruta, &destino) {
+        // No se ha movido nada: se vuelve a abrir la base donde estaba
+        if let Ok(c) = abrir_compartida(&s.ruta, s.origen) {
+            *s.db.lock().map_err(e)? = Some(c);
+        }
+        s.moviendo.store(false, Ordering::SeqCst);
+        return Err(format!(
+            "No se ha podido mover la base de datos: {}. Cierra el programa en los demás equipos y vuelve a intentarlo.",
+            err
+        ));
+    }
+    // Abrirla ya desde su nueva ubicación y cerrar esta ventana
+    let _ = std::fs::create_dir_all(&s.local_dir);
+    let _ = std::fs::write(s.local_dir.join(NOMBRE_ULTIMO), destino.display().to_string());
+    let exe = std::env::current_exe().map_err(e)?;
+    std::process::Command::new(exe)
+        .arg("--db")
+        .arg(&destino)
+        .spawn()
+        .map_err(|err| {
+            format!(
+                "La base se ha movido a {} pero no se ha podido reabrir: {}",
+                destino.display(),
+                err
+            )
+        })?;
+    app.exit(0);
+    Ok(destino.display().to_string())
+}
+
 #[tauri::command(async)]
 fn info_db(s: State<AppState>) -> Res<InfoDb> {
     info(&s)
@@ -1846,6 +1921,9 @@ fn info_db(s: State<AppState>) -> Res<InfoDb> {
 /// Vuelve a abrir la base de datos compartida (tras un corte de red).
 #[tauri::command(async)]
 fn reconectar(s: State<AppState>) -> Res<InfoDb> {
+    if s.moviendo.load(std::sync::atomic::Ordering::SeqCst) {
+        return info(&s);
+    }
     match abrir_compartida(&s.ruta, s.origen) {
         Ok(c) => {
             *s.db.lock().map_err(e)? = Some(c);
@@ -2100,6 +2178,7 @@ pub fn run() {
                 admin: Mutex::new(false),
                 ultimo_latido: Mutex::new(None),
                 error_conexion: Mutex::new(error),
+                moviendo: std::sync::atomic::AtomicBool::new(false),
             });
             Ok(())
         })
@@ -2133,6 +2212,7 @@ pub fn run() {
             listar_eventos,
             crear_evento,
             abrir_evento,
+            mover_a_eventos,
             titulo_ventana,
             info_db,
             reconectar,
@@ -2283,6 +2363,19 @@ mod tests {
         assert_eq!((n.as_str(), cob.as_str()), ("Ana", "Carmen"));
         assert_eq!(leer_config(&db).precio_comida, 3500);
         assert!(!bd_vacia(&db).unwrap());
+    }
+
+    #[test]
+    fn nombres_de_archivo_de_evento() {
+        let d = tmp("dir-eventos");
+        std::fs::create_dir_all(&d).unwrap();
+        let r1 = ruta_libre_evento(&d, "Comida: Navidad?");
+        assert_eq!(r1.file_name().unwrap().to_string_lossy(), "Comida Navidad.db");
+        std::fs::write(&r1, b"x").unwrap();
+        let r2 = ruta_libre_evento(&d, "Comida: Navidad?");
+        assert_eq!(r2.file_name().unwrap().to_string_lossy(), "Comida Navidad (1).db");
+        let r3 = ruta_libre_evento(&d, "///");
+        assert_eq!(r3.file_name().unwrap().to_string_lossy(), "evento.db");
     }
 
     #[test]

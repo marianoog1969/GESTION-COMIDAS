@@ -5,11 +5,13 @@ import Dialogo from "./Dialogo";
 import Icono from "./Icono";
 
 /** Lista de eventos: abrir otro en una ventana nueva, cambiar a él o crear uno nuevo. */
-export default function EventosDialog(props: { onCancel: () => void }) {
+export default function EventosDialog(props: { onCancel: () => void; admin: boolean }) {
   const [eventos, setEventos] = useState<EventoInfo[] | null>(null);
   const [nombre, setNombre] = useState("");
   const [err, setErr] = useState("");
   const [ocupado, setOcupado] = useState(false);
+  const [nombreMover, setNombreMover] = useState("");
+  const [confirmando, setConfirmando] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
@@ -31,6 +33,23 @@ export default function EventosDialog(props: { onCancel: () => void }) {
       if (!cambiar) props.onCancel();
     } catch (e) {
       setErr(String(e));
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  const principalAbierta = eventos?.find((x) => x.actual && x.principal);
+
+  const mover = async () => {
+    if (!nombreMover.trim() || ocupado) return;
+    try {
+      setErr("");
+      setOcupado(true);
+      // Si todo va bien, esta ventana se cierra y se abre el evento en la nueva ubicación
+      await invoke("mover_a_eventos", { nombre: nombreMover });
+    } catch (e) {
+      setErr(String(e));
+      setConfirmando(false);
     } finally {
       setOcupado(false);
     }
@@ -115,6 +134,49 @@ export default function EventosDialog(props: { onCancel: () => void }) {
         y se abren en una ventana nueva. Los demás equipos los ven si ejecutan el mismo programa
         desde esa carpeta. Cada evento tiene su propia contraseña de administrador.
       </p>
+      {principalAbierta && (
+        <>
+          <h3 className="sub">Pasar la base actual a Eventos</h3>
+          {!props.admin ? (
+            <p className="muted small">
+              Para mover la base principal a la carpeta «Eventos» con otro nombre, desbloquea
+              antes el modo administrador.
+            </p>
+          ) : (
+            <>
+              <div className="addrow">
+                <input
+                  placeholder="Nombre que tendrá (p. ej. Comida JP)"
+                  value={nombreMover}
+                  onChange={(ev) => {
+                    setNombreMover(ev.target.value);
+                    setConfirmando(false);
+                  }}
+                />
+                {!confirmando ? (
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={!nombreMover.trim() || ocupado}
+                    onClick={() => setConfirmando(true)}
+                  >
+                    Mover…
+                  </button>
+                ) : (
+                  <button type="button" className="btn primary" disabled={ocupado} onClick={mover}>
+                    Confirmar y mover
+                  </button>
+                )}
+              </div>
+              <p className="muted small">
+                {confirmando
+                  ? "Se moverá celebracion.db a la carpeta «Eventos» con ese nombre (también será el nombre del evento), esta ventana se cerrará y se abrirá de nuevo. Antes, cierra el programa en los demás equipos; si alguno lo tiene abierto, no se mueve nada."
+                  : "Mueve la base de datos principal a la carpeta «Eventos» con el nombre que indiques. Los datos no se pierden."}
+              </p>
+            </>
+          )}
+        </>
+      )}
       {err && <div className="error">{err}</div>}
     </Dialogo>
   );
