@@ -143,6 +143,8 @@ export interface InfoDb {
   origen: "exe" | "ini" | "evento";
   conectado: boolean;
   error: string | null;
+  /** Hay eventos pero ninguno abierto: hay que elegir uno */
+  sin_evento: boolean;
 }
 
 /** Datos locales de una versión anterior que se pueden importar */

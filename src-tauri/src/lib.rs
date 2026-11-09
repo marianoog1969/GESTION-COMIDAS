@@ -49,6 +49,10 @@ struct AppState {
     error_conexion: Mutex<Option<String>>,
     /// Verdadero mientras se mueve la base principal: no se debe reconectar ni crear otra
     moviendo: std::sync::atomic::AtomicBool,
+    /// No hay base abierta: hay eventos en «Eventos» y el usuario debe elegir uno
+    sin_evento: bool,
+    /// Primer arranque sin nada: se creó el primer evento en «Eventos»
+    primer_inicio: bool,
 }
 
 fn con<'a>(g: &'a MutexGuard<Option<Connection>>) -> Res<&'a Connection> {
@@ -1595,6 +1599,7 @@ struct InfoDb {
     origen: String,
     conectado: bool,
     error: Option<String>,
+    sin_evento: bool,
 }
 
 #[derive(Serialize)]
@@ -1625,6 +1630,7 @@ fn info(s: &State<AppState>) -> Res<InfoDb> {
         origen: s.origen.to_string(),
         conectado,
         error: s.error_conexion.lock().map_err(e)?.clone(),
+        sin_evento: s.sin_evento,
     })
 }
 
@@ -1636,6 +1642,7 @@ fn info(s: &State<AppState>) -> Res<InfoDb> {
 
 const NOMBRE_ULTIMO: &str = "evento_actual.txt";
 const NOMBRE_EVENTOS: &str = "Eventos";
+const NOMBRE_PRIMER_EVENTO: &str = "Comida de celebración";
 
 fn mismo_archivo(a: &Path, b: &Path) -> bool {
     match (a.canonicalize(), b.canonicalize()) {
@@ -1674,6 +1681,39 @@ fn ruta_de_inicio(
         }
     }
     (principal.to_path_buf(), origen_principal)
+}
+
+/// Qué hacer al arrancar si la base elegida es la principal y todavía no existe.
+#[derive(Debug, PartialEq)]
+enum SinBase {
+    /// Existe: abrir normalmente
+    Normal,
+    /// Hay eventos en «Eventos»: no crear nada, que el usuario elija
+    Elegir,
+    /// No hay nada en ningún sitio: crear el primer evento en «Eventos»
+    PrimerEvento,
+}
+
+fn hay_eventos(dir: &Path) -> bool {
+    std::fs::read_dir(dir).map_or(false, |rd| {
+        rd.flatten().any(|e| {
+            let p = e.path();
+            p.is_file()
+                && p.extension()
+                    .and_then(|x| x.to_str())
+                    .map_or(false, |x| x.eq_ignore_ascii_case("db"))
+        })
+    })
+}
+
+fn sin_base(ruta: &Path, origen: &str, dir_eventos: &Path) -> SinBase {
+    if origen == "evento" || ruta.is_file() {
+        SinBase::Normal
+    } else if hay_eventos(dir_eventos) {
+        SinBase::Elegir
+    } else {
+        SinBase::PrimerEvento
+    }
 }
 
 #[derive(Serialize)]
@@ -1921,7 +1961,7 @@ fn info_db(s: State<AppState>) -> Res<InfoDb> {
 /// Vuelve a abrir la base de datos compartida (tras un corte de red).
 #[tauri::command(async)]
 fn reconectar(s: State<AppState>) -> Res<InfoDb> {
-    if s.moviendo.load(std::sync::atomic::Ordering::SeqCst) {
+    if s.sin_evento || s.moviendo.load(std::sync::atomic::Ordering::SeqCst) {
         return info(&s);
     }
     match abrir_compartida(&s.ruta, s.origen) {
@@ -1942,7 +1982,7 @@ fn reconectar(s: State<AppState>) -> Res<InfoDb> {
 #[tauri::command(async)]
 fn migracion_pendiente(s: State<AppState>) -> Res<Option<Migracion>> {
     // Solo se ofrece importar en la base principal, nunca en un evento nuevo
-    if !mismo_archivo(&s.ruta, &s.principal) || s.ruta_antigua == s.ruta || !s.ruta_antigua.is_file() {
+    if !(s.primer_inicio || mismo_archivo(&s.ruta, &s.principal)) || s.ruta_antigua == s.ruta || !s.ruta_antigua.is_file() {
         return Ok(None);
     }
     {
@@ -2155,16 +2195,38 @@ pub fn run() {
                 .unwrap_or_else(|| PathBuf::from("."));
             let (principal, origen_principal) = ruta_compartida(&dir_exe);
             let local_dir = app.path().app_local_data_dir()?;
-            let (ruta, origen) = ruta_de_inicio(&principal, origen_principal, &local_dir);
+            let (mut ruta, mut origen) = ruta_de_inicio(&principal, origen_principal, &local_dir);
             let dir_eventos = principal
                 .parent()
                 .map(|d| d.join(NOMBRE_EVENTOS))
                 .unwrap_or_else(|| PathBuf::from(NOMBRE_EVENTOS));
+            let mut sin_evento = false;
+            let mut primer_inicio = false;
+            match sin_base(&ruta, origen, &dir_eventos) {
+                SinBase::Normal => {}
+                SinBase::Elegir => sin_evento = true,
+                SinBase::PrimerEvento => {
+                    if std::fs::create_dir_all(&dir_eventos).is_ok() {
+                        ruta = ruta_libre_evento(&dir_eventos, NOMBRE_PRIMER_EVENTO);
+                        origen = "evento";
+                        primer_inicio = true;
+                    }
+                }
+            }
             // Si no se puede abrir NO se usa una base local (se partirían los datos):
             // se arranca sin conexión y se avisa.
-            let (conn, error) = match abrir_compartida(&ruta, origen) {
-                Ok(c) => (Some(c), None),
-                Err(err) => (None, Some(err)),
+            let (conn, error) = if sin_evento {
+                (None, None)
+            } else {
+                match abrir_compartida(&ruta, origen) {
+                    Ok(c) => {
+                        if primer_inicio {
+                            let _ = set_key(&c, "evento", NOMBRE_PRIMER_EVENTO);
+                        }
+                        (Some(c), None)
+                    }
+                    Err(err) => (None, Some(err)),
+                }
             };
             let ruta_antigua = app.path().app_data_dir()?.join(NOMBRE_DB);
             app.manage(AppState {
@@ -2179,6 +2241,8 @@ pub fn run() {
                 ultimo_latido: Mutex::new(None),
                 error_conexion: Mutex::new(error),
                 moviendo: std::sync::atomic::AtomicBool::new(false),
+                sin_evento,
+                primer_inicio,
             });
             Ok(())
         })
@@ -2376,6 +2440,26 @@ mod tests {
         assert_eq!(r2.file_name().unwrap().to_string_lossy(), "Comida Navidad (1).db");
         let r3 = ruta_libre_evento(&d, "///");
         assert_eq!(r3.file_name().unwrap().to_string_lossy(), "evento.db");
+    }
+
+    #[test]
+    fn arranque_sin_base() {
+        let dir = tmp("arranque-sin-base");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let principal = dir.join("celebracion.db");
+        let ev = dir.join("Eventos");
+        // Nada en ningún sitio: primer evento en Eventos
+        assert_eq!(sin_base(&principal, "exe", &ev), SinBase::PrimerEvento);
+        // Hay eventos: no se crea nada, se elige
+        std::fs::create_dir_all(&ev).unwrap();
+        std::fs::write(ev.join("a.db"), b"x").unwrap();
+        assert_eq!(sin_base(&principal, "exe", &ev), SinBase::Elegir);
+        // Un evento ya elegido, o la principal existente, se abren sin más
+        assert_eq!(sin_base(&ev.join("a.db"), "evento", &ev), SinBase::Normal);
+        std::fs::write(&principal, b"x").unwrap();
+        assert_eq!(sin_base(&principal, "exe", &ev), SinBase::Normal);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

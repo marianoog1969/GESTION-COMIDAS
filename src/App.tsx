@@ -373,6 +373,14 @@ export default function App() {
     />
   );
 
+  if (!datos && infoDb?.sin_evento) {
+    return (
+      <div className="loading">
+        <EventosDialog onCancel={() => {}} admin={false} sinEvento />
+      </div>
+    );
+  }
+
   if (!datos) {
     return (
       <div className="loading">

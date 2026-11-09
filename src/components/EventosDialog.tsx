@@ -5,7 +5,7 @@ import Dialogo from "./Dialogo";
 import Icono from "./Icono";
 
 /** Lista de eventos: abrir otro en una ventana nueva, cambiar a él o crear uno nuevo. */
-export default function EventosDialog(props: { onCancel: () => void; admin: boolean }) {
+export default function EventosDialog(props: { onCancel: () => void; admin: boolean; sinEvento?: boolean }) {
   const [eventos, setEventos] = useState<EventoInfo[] | null>(null);
   const [nombre, setNombre] = useState("");
   const [err, setErr] = useState("");
@@ -29,8 +29,8 @@ export default function EventosDialog(props: { onCancel: () => void; admin: bool
     try {
       setErr("");
       setOcupado(true);
-      await invoke("abrir_evento", { ruta: ev.ruta, cambiar });
-      if (!cambiar) props.onCancel();
+      await invoke("abrir_evento", { ruta: ev.ruta, cambiar: cambiar || !!props.sinEvento });
+      if (!cambiar && !props.sinEvento) props.onCancel();
     } catch (e) {
       setErr(String(e));
     } finally {
@@ -61,7 +61,7 @@ export default function EventosDialog(props: { onCancel: () => void; admin: bool
       setErr("");
       setOcupado(true);
       const ruta = await invoke<string>("crear_evento", { nombre });
-      await invoke("abrir_evento", { ruta, cambiar: false });
+      await invoke("abrir_evento", { ruta, cambiar: !!props.sinEvento });
       setNombre("");
       await cargar();
     } catch (e) {
@@ -73,6 +73,11 @@ export default function EventosDialog(props: { onCancel: () => void; admin: bool
 
   return (
     <Dialogo titulo="Eventos" onCancel={props.onCancel} onSubmit={crear} ancho={640}>
+      {props.sinEvento && (
+        <p>
+          <b>No hay ningún evento abierto.</b> Elige uno de la lista o crea uno nuevo.
+        </p>
+      )}
       <p className="muted">
         Cada evento tiene su propia base de datos, independiente de los demás. Puedes tener
         varios abiertos a la vez, cada uno en su ventana.
