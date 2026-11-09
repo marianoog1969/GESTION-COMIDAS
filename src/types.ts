@@ -139,8 +139,8 @@ export const normalizar = (s: string): string =>
 
 export interface InfoDb {
   ruta: string;
-  /** "exe": junto al programa · "ini": indicada en celebracion.ini */
-  origen: "exe" | "ini";
+  /** "exe": junto al programa · "ini": celebracion.ini · "evento": elegido en Eventos */
+  origen: "exe" | "ini" | "evento";
   conectado: boolean;
   error: string | null;
 }
@@ -161,4 +161,16 @@ export interface Conectado {
 export interface Sondeo {
   version: number;
   conectados: Conectado[];
+}
+
+/** Un evento (archivo de base de datos) de los que se pueden abrir. */
+export interface EventoInfo {
+  nombre: string;
+  archivo: string;
+  ruta: string;
+  actual: boolean;
+  principal: boolean;
+  personas: number;
+  pagados: number;
+  error: string | null;
 }

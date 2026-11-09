@@ -20,6 +20,8 @@ export default function BaseDatosDialog(props: {
           <div className="muted small">
             {info.origen === "ini"
               ? "Ubicación indicada en celebracion.ini"
+              : info.origen === "evento"
+              ? "Evento elegido en la lista de Eventos"
               : "En la misma carpeta que el programa"}
           </div>
           {info.error && <div className="small">{info.error}</div>}

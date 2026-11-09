@@ -38,6 +38,12 @@ struct AppState {
     origen: &'static str,
     /// Base local de versiones anteriores (una por equipo), para ofrecer importarla
     ruta_antigua: PathBuf,
+    /// Base de datos «principal» (la de siempre: junto al .exe o la de celebracion.ini)
+    principal: PathBuf,
+    /// Carpeta donde viven los demás eventos (una subcarpeta «Eventos» junto a la principal)
+    dir_eventos: PathBuf,
+    /// Datos locales de este equipo (último evento abierto)
+    local_dir: PathBuf,
     admin: Mutex<bool>,
     ultimo_latido: Mutex<Option<Instant>>,
     error_conexion: Mutex<Option<String>>,
@@ -1547,6 +1553,9 @@ fn leer_ini(txt: &str, clave: &str) -> Option<String> {
 
 fn abrir_compartida(ruta: &Path, origen: &str) -> Res<Connection> {
     abrir_db(ruta, true).map_err(|err| {
+        if origen == "evento" {
+            return format!("{} (evento: {})", err, ruta.display());
+        }
         let carpeta = ruta
             .parent()
             .map(|d| d.display().to_string())
@@ -1617,6 +1626,218 @@ fn info(s: &State<AppState>) -> Res<InfoDb> {
     })
 }
 
+// ───────────────────────── Varios eventos ─────────────────────────
+//
+// Cada evento es un archivo .db independiente. El «principal» es el de siempre; los demás
+// están en la subcarpeta «Eventos» junto a él. Cada evento se abre en su propia ventana
+// (otro proceso del mismo programa con `--db ruta`), así pueden verse varios a la vez.
+
+const NOMBRE_ULTIMO: &str = "evento_actual.txt";
+const NOMBRE_EVENTOS: &str = "Eventos";
+
+fn mismo_archivo(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => a == b,
+    }
+}
+
+/// Valor de `--db <ruta>` en la línea de comandos.
+fn argumento_db() -> Option<PathBuf> {
+    let mut it = std::env::args().skip(1);
+    while let Some(a) = it.next() {
+        if a == "--db" {
+            return it.next().map(PathBuf::from);
+        }
+    }
+    None
+}
+
+/// Qué base abrir al arrancar: la indicada con `--db`, el último evento elegido en este
+/// equipo, o la principal.
+fn ruta_de_inicio(
+    principal: &Path,
+    origen_principal: &'static str,
+    local_dir: &Path,
+) -> (PathBuf, &'static str) {
+    if let Some(r) = argumento_db() {
+        if r.is_file() {
+            return (r, "evento");
+        }
+    }
+    if let Ok(t) = std::fs::read_to_string(local_dir.join(NOMBRE_ULTIMO)) {
+        let r = PathBuf::from(t.trim());
+        if !t.trim().is_empty() && r.is_file() && !mismo_archivo(&r, principal) {
+            return (r, "evento");
+        }
+    }
+    (principal.to_path_buf(), origen_principal)
+}
+
+#[derive(Serialize)]
+struct EventoInfo {
+    nombre: String,
+    archivo: String,
+    ruta: String,
+    actual: bool,
+    principal: bool,
+    personas: i64,
+    pagados: i64,
+    error: Option<String>,
+}
+
+fn resumen_evento(ruta: &Path) -> Res<(String, i64, i64)> {
+    let c = abrir_db(ruta, false)?;
+    let nombre = leer_config(&c).evento;
+    let (p, pg) = c
+        .query_row(
+            "SELECT COUNT(*), COALESCE(SUM(pagado),0) FROM participantes",
+            [],
+            |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)),
+        )
+        .map_err(e)?;
+    Ok((nombre, p, pg))
+}
+
+#[tauri::command(async)]
+fn listar_eventos(s: State<AppState>) -> Res<Vec<EventoInfo>> {
+    let mut rutas: Vec<PathBuf> = Vec::new();
+    if s.principal.is_file() {
+        rutas.push(s.principal.clone());
+    }
+    if let Ok(rd) = std::fs::read_dir(&s.dir_eventos) {
+        for ent in rd.flatten() {
+            let p = ent.path();
+            let es_db = p
+                .extension()
+                .and_then(|x| x.to_str())
+                .map_or(false, |x| x.eq_ignore_ascii_case("db"));
+            if p.is_file() && es_db {
+                rutas.push(p);
+            }
+        }
+    }
+    if s.ruta.is_file() && !rutas.iter().any(|r| mismo_archivo(r, &s.ruta)) {
+        rutas.push(s.ruta.clone());
+    }
+    let mut v: Vec<EventoInfo> = rutas
+        .into_iter()
+        .map(|ruta| {
+            let archivo = ruta
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let principal = mismo_archivo(&ruta, &s.principal);
+            let actual = mismo_archivo(&ruta, &s.ruta);
+            match resumen_evento(&ruta) {
+                Ok((nombre, personas, pagados)) => EventoInfo {
+                    nombre,
+                    archivo,
+                    ruta: ruta.display().to_string(),
+                    actual,
+                    principal,
+                    personas,
+                    pagados,
+                    error: None,
+                },
+                Err(err) => EventoInfo {
+                    nombre: archivo.clone(),
+                    archivo,
+                    ruta: ruta.display().to_string(),
+                    actual,
+                    principal,
+                    personas: 0,
+                    pagados: 0,
+                    error: Some(err),
+                },
+            }
+        })
+        .collect();
+    v.sort_by(|a, b| {
+        b.actual
+            .cmp(&a.actual)
+            .then_with(|| a.nombre.to_lowercase().cmp(&b.nombre.to_lowercase()))
+    });
+    Ok(v)
+}
+
+/// Crea un evento nuevo (archivo .db vacío en la carpeta «Eventos») y devuelve su ruta.
+#[tauri::command(async)]
+fn crear_evento(s: State<AppState>, nombre: String) -> Res<String> {
+    let nombre = nombre.trim().to_string();
+    if nombre.is_empty() {
+        return Err("El nombre del evento es obligatorio".into());
+    }
+    let limpio: String = nombre
+        .chars()
+        .filter(|c| !c.is_control() && !"\\/:*?\"<>|".contains(*c))
+        .collect();
+    let limpio = limpio.trim().trim_matches('.').trim().to_string();
+    let limpio = if limpio.is_empty() { "evento".to_string() } else { limpio };
+    std::fs::create_dir_all(&s.dir_eventos).map_err(|err| {
+        format!(
+            "No se puede crear la carpeta de eventos ({}): {}",
+            s.dir_eventos.display(),
+            err
+        )
+    })?;
+    let mut ruta = s.dir_eventos.join(format!("{}.db", limpio));
+    let mut n = 1;
+    while ruta.exists() {
+        ruta = s.dir_eventos.join(format!("{} ({}).db", limpio, n));
+        n += 1;
+    }
+    let c = abrir_db(&ruta, true)?;
+    set_key(&c, "evento", &nombre)?;
+    drop(c);
+    Ok(ruta.display().to_string())
+}
+
+/// Abre un evento en una ventana nueva; con `cambiar`, cierra además esta ventana.
+#[tauri::command(async)]
+fn abrir_evento(
+    app: tauri::AppHandle,
+    s: State<AppState>,
+    ruta: String,
+    cambiar: bool,
+) -> Res<()> {
+    let ruta = PathBuf::from(ruta);
+    if !ruta.is_file() {
+        return Err(format!("No se encuentra el archivo {}", ruta.display()));
+    }
+    // Solo la base principal, las de la carpeta de eventos o la actual
+    let permitido = mismo_archivo(&ruta, &s.principal)
+        || mismo_archivo(&ruta, &s.ruta)
+        || ruta
+            .parent()
+            .map_or(false, |d| mismo_archivo(d, &s.dir_eventos));
+    if !permitido {
+        return Err("Ese archivo no es un evento de esta carpeta".into());
+    }
+    let exe = std::env::current_exe().map_err(e)?;
+    std::process::Command::new(exe)
+        .arg("--db")
+        .arg(&ruta)
+        .spawn()
+        .map_err(|err| format!("No se ha podido abrir el evento: {}", err))?;
+    // Recordar el último evento elegido en este equipo (para el próximo arranque)
+    let _ = std::fs::create_dir_all(&s.local_dir);
+    let _ = std::fs::write(s.local_dir.join(NOMBRE_ULTIMO), ruta.display().to_string());
+    if cambiar {
+        app.exit(0);
+    }
+    Ok(())
+}
+
+/// Título de la ventana: «Evento — Comida de celebración».
+#[tauri::command(async)]
+fn titulo_ventana(app: tauri::AppHandle, titulo: String) -> Res<()> {
+    if let Some(w) = app.get_webview_window("main") {
+        w.set_title(&titulo).map_err(e)?;
+    }
+    Ok(())
+}
+
 #[tauri::command(async)]
 fn info_db(s: State<AppState>) -> Res<InfoDb> {
     info(&s)
@@ -1642,7 +1863,8 @@ fn reconectar(s: State<AppState>) -> Res<InfoDb> {
 /// (solo si la base compartida está todavía vacía).
 #[tauri::command(async)]
 fn migracion_pendiente(s: State<AppState>) -> Res<Option<Migracion>> {
-    if s.ruta_antigua == s.ruta || !s.ruta_antigua.is_file() {
+    // Solo se ofrece importar en la base principal, nunca en un evento nuevo
+    if !mismo_archivo(&s.ruta, &s.principal) || s.ruta_antigua == s.ruta || !s.ruta_antigua.is_file() {
         return Ok(None);
     }
     {
@@ -1853,7 +2075,13 @@ pub fn run() {
                 .parent()
                 .map(Path::to_path_buf)
                 .unwrap_or_else(|| PathBuf::from("."));
-            let (ruta, origen) = ruta_compartida(&dir_exe);
+            let (principal, origen_principal) = ruta_compartida(&dir_exe);
+            let local_dir = app.path().app_local_data_dir()?;
+            let (ruta, origen) = ruta_de_inicio(&principal, origen_principal, &local_dir);
+            let dir_eventos = principal
+                .parent()
+                .map(|d| d.join(NOMBRE_EVENTOS))
+                .unwrap_or_else(|| PathBuf::from(NOMBRE_EVENTOS));
             // Si no se puede abrir NO se usa una base local (se partirían los datos):
             // se arranca sin conexión y se avisa.
             let (conn, error) = match abrir_compartida(&ruta, origen) {
@@ -1866,6 +2094,9 @@ pub fn run() {
                 ruta,
                 origen,
                 ruta_antigua,
+                principal,
+                dir_eventos,
+                local_dir,
                 admin: Mutex::new(false),
                 ultimo_latido: Mutex::new(None),
                 error_conexion: Mutex::new(error),
@@ -1899,6 +2130,10 @@ pub fn run() {
             restaurar_traspaso,
             exportar_csv,
             descargar_pdf,
+            listar_eventos,
+            crear_evento,
+            abrir_evento,
+            titulo_ventana,
             info_db,
             reconectar,
             sondeo,
@@ -2048,6 +2283,25 @@ mod tests {
         assert_eq!((n.as_str(), cob.as_str()), ("Ana", "Carmen"));
         assert_eq!(leer_config(&db).precio_comida, 3500);
         assert!(!bd_vacia(&db).unwrap());
+    }
+
+    #[test]
+    fn eventos_independientes() {
+        let a = tmp("evento-a.db");
+        let b = tmp("evento-b.db");
+        let ca = abrir_db(&a, true).unwrap();
+        let cb = abrir_db(&b, true).unwrap();
+        set_key(&ca, "evento", "Jubilación").unwrap();
+        set_key(&cb, "evento", "Navidad").unwrap();
+        ca.execute("INSERT INTO participantes(nombre,comida,pagado) VALUES('Ana',1,1)", [])
+            .unwrap();
+        drop((ca, cb));
+        let (n, p, pg) = resumen_evento(&a).unwrap();
+        assert_eq!((n.as_str(), p, pg), ("Jubilación", 1, 1));
+        let (n, p, pg) = resumen_evento(&b).unwrap();
+        assert_eq!((n.as_str(), p, pg), ("Navidad", 0, 0));
+        assert!(mismo_archivo(&a, &a));
+        assert!(!mismo_archivo(&a, &b));
     }
 
     #[test]

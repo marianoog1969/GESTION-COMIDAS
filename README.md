@@ -28,6 +28,17 @@ Desarrollo: `npm run tauri dev` (la base de datos se crea junto al ejecutable de
 8. **¿Dónde está el dinero?**: total en efectivo y Bizum y lo que tiene cada cobrador.
 9. **🖨 Imprimir**: listado limpio con estado de cada persona y resumen al pie.
 
+## Varios eventos
+
+Un mismo programa sirve para varios eventos a la vez, cada uno con su propia base de datos (archivo `.db`) y su propia contraseña de administrador:
+
+- **Eventos** (botón de la barra superior): lista los eventos disponibles con el número de personas y de pagos. **Abrir aparte** lo abre en una ventana nueva y mantiene la actual (así se ven varios a la vez); **Cambiar a este** cierra la ventana actual y abre ese evento.
+- **Nuevo evento**: se escribe el nombre y se crea un archivo en la subcarpeta `Eventos`, junto a la base de datos principal; se abre en una ventana nueva.
+- La base de datos de siempre (`celebracion.db`) es el evento **Principal**; no se pierde ni se modifica.
+- Cada equipo recuerda el último evento que abrió y lo vuelve a abrir al arrancar. Los demás equipos ven los mismos eventos si ejecutan el programa desde la misma carpeta.
+- Para abrir un evento concreto directamente (acceso directo): `celebracion.exe --db "\\servidor\carpeta\Eventos\Navidad.db"`.
+- El título de la ventana muestra el nombre del evento.
+
 ## Menús y regalo por persona
 
 - **Tipos de menú** (⚙ Parámetros): solo nombre, sin precio (p. ej. *Carne*, *Pescado*). En la columna *Modalidad* se elige el menú de cada persona o *Solo regalo*. No se puede eliminar un menú que alguien tenga elegido. El informe CSV incluye cuántas personas hay por menú.

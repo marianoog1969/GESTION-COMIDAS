@@ -25,13 +25,14 @@ import BaseDatosDialog from "./components/BaseDatosDialog";
 import Dialogo from "./components/Dialogo";
 import Icono from "./components/Icono";
 import Logo from "./components/Logo";
+import EventosDialog from "./components/EventosDialog";
 import CeldaTexto from "./components/CeldaTexto";
 import CeldaSelect from "./components/CeldaSelect";
 import GastosView from "./components/Gastos";
 import TraspasosView from "./components/Traspasos";
 import { copiar, informeCsv, nombreArchivo, textoPendientes } from "./exportar";
 
-type Modal = null | "unlock" | "setup" | "config" | "password" | "about" | "db" | "importar";
+type Modal = null | "unlock" | "setup" | "config" | "password" | "about" | "db" | "importar" | "eventos";
 
 // Cada cuánto se comprueba si otro equipo ha guardado algo
 const SONDEO_MS = 2500;
@@ -150,6 +151,15 @@ export default function App() {
       setErrorCarga(String(err));
     }
   }, []);
+
+  // Título de la ventana: «Evento — Comida de celebración»
+  const nombreEvento = datos?.config.evento;
+  useEffect(() => {
+    if (nombreEvento === undefined) return;
+    invoke("titulo_ventana", {
+      titulo: nombreEvento ? `${nombreEvento} — Comida de celebración` : "Comida de celebración",
+    }).catch(() => {});
+  }, [nombreEvento]);
 
   useEffect(() => {
     (async () => {
@@ -706,6 +716,13 @@ export default function App() {
             sinConexion={sinConexion}
             onClick={() => setModal("db")}
           />
+          <button
+            className="btn"
+            title="Abrir otro evento, cambiar de evento o crear uno nuevo"
+            onClick={() => setModal("eventos")}
+          >
+            <Icono n="folder" /> Eventos
+          </button>
           {estado.desbloqueado ? (
             <div className="admin-group" role="group" aria-label="Administración">
               <span className="admin-badge">Administrador</span>
@@ -1337,6 +1354,8 @@ export default function App() {
           }}
         />
       )}
+
+      {modal === "eventos" && <EventosDialog onCancel={() => setModal(null)} />}
 
       {modal === "about" && <AboutDialog onClose={() => setModal(null)} />}
 
