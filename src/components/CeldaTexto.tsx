@@ -40,7 +40,7 @@ export default function CeldaTexto(props: {
       inputMode={props.inputMode}
       aria-label={props.etiqueta}
       placeholder={props.placeholder}
-      title={invalido ? "Valor no válido: se restaurará el anterior" : undefined}
+      title={invalido ? "Valor no válido: se restaurará el anterior" : v.length > 24 ? v : undefined}
       onChange={(ev) => {
         setV(ev.target.value);
         setInvalido(!esValido(ev.target.value));

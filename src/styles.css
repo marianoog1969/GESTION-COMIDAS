@@ -1596,3 +1596,13 @@ tfoot td {
 input.fecha-edit { width: 128px; font-size: 12px; padding: 2px 4px; }
 .no-print { }
 @media print { .no-print { display: none !important; } }
+
+/* Resumen por menú, con filtro */
+.menubar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 10px; font-size: 13px; }
+.mchip { border: 1px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 3px 10px; cursor: pointer; font: inherit; color: inherit; }
+.mchip:hover { background: #eff4ff; }
+.mchip.on { background: var(--primary, #1d4ed8); border-color: var(--primary, #1d4ed8); color: #fff; }
+.mchip.warn { background: var(--warn-soft, #fdf3dc); border-color: #ecd39b; color: var(--warn, #8a5a00); }
+.mchip.warn.on { background: var(--warn, #8a5a00); color: #fff; }
+td select.tag-select { min-width: 178px; }
+@media print { .menubar { display: none; } }

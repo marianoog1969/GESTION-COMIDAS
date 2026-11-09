@@ -74,6 +74,8 @@ export default function App() {
   const [modal, setModal] = useState<Modal>(null);
   const [trasDesbloquear, setTrasDesbloquear] = useState<Modal>(null);
   const [filtro, setFiltro] = useState<Filtro>("todos");
+  /** Filtro por menú: «todos», «sin» (comida sin menú), «regalo» o «m:ID» */
+  const [filtroMenu, setFiltroMenu] = useState("todos");
   const [busqueda, setBusqueda] = useState("");
   const [orden, setOrden] = useState<Orden>({ col: "nombre", dir: 1 });
   const [ultimoCobrador, setUltimoCobrador] = useState<number | null>(() => {
@@ -313,6 +315,10 @@ export default function App() {
       if (filtro === "pendientes" && p.pagado) return false;
       if (filtro === "pagados" && !p.pagado) return false;
       if (q && !normalizar(p.nombre + " " + p.notas).includes(q)) return false;
+      if (filtroMenu !== "todos") {
+        if (filtroMenu === "regalo" ? p.comida : filtroMenu === "sin" ? !(p.comida && !p.menu_id) : `m:${p.menu_id}` !== filtroMenu)
+          return false;
+      }
       return true;
     });
     const cmpNombre = (a: Participante, b: Participante) =>
@@ -332,7 +338,7 @@ export default function App() {
     return [...filtrados].sort(
       (a, b) => cmp(a, b) * orden.dir || cmpNombre(a, b)
     );
-  }, [datos, filtro, busqueda, orden]);
+  }, [datos, filtro, filtroMenu, busqueda, orden]);
 
   /** Abre un diálogo de administración; si está bloqueado pide antes la contraseña. */
   const abrirAdmin = (destino: Modal) => {
@@ -461,6 +467,7 @@ export default function App() {
     resumen.total_esperado > 0
       ? Math.round((resumen.cobrado / resumen.total_esperado) * 100)
       : 0;
+  const sinMenu = datos.participantes.filter((p) => p.comida && !p.menu_id).length;
   const todoCobrado = resumen.total_personas > 0 && resumen.pendientes === 0;
 
   // ─── Acciones ───
@@ -800,6 +807,42 @@ export default function App() {
           </Card>
         )}
       </section>
+      {datos.menus.length > 0 && vista === "personas" && (
+        <div className="menubar" aria-label="Resumen por menú">
+          <span className="muted">Menús:</span>
+          {datos.menus.map((m) => (
+            <button
+              key={m.id}
+              className={"mchip" + (filtroMenu === `m:${m.id}` ? " on" : "")}
+              title={`Ver solo a quien ha elegido ${m.nombre}`}
+              onClick={() => setFiltroMenu(filtroMenu === `m:${m.id}` ? "todos" : `m:${m.id}`)}
+            >
+              🍽 {m.nombre} <b>{m.personas}</b>
+            </button>
+          ))}
+          {sinMenu > 0 && (
+            <button
+              className={"mchip warn" + (filtroMenu === "sin" ? " on" : "")}
+              title="Ver a quien aún no tiene menú elegido"
+              onClick={() => setFiltroMenu(filtroMenu === "sin" ? "todos" : "sin")}
+            >
+              ⚠ Sin elegir <b>{sinMenu}</b>
+            </button>
+          )}
+          <button
+            className={"mchip" + (filtroMenu === "regalo" ? " on" : "")}
+            title="Ver a quien solo aporta al regalo"
+            onClick={() => setFiltroMenu(filtroMenu === "regalo" ? "todos" : "regalo")}
+          >
+            🎁 Solo regalo <b>{resumen.solo_regalo}</b>
+          </button>
+          {filtroMenu !== "todos" && (
+            <button className="btn linklike" onClick={() => setFiltroMenu("todos")}>
+              Quitar filtro de menú
+            </button>
+          )}
+        </div>
+      )}
 
       {(resumen.pagados > 0 || resumen.gastos > 0) && (
         <section className="caja">
@@ -1081,6 +1124,7 @@ export default function App() {
                         onClick={() => {
                           setBusqueda("");
                           setFiltro("todos");
+                          setFiltroMenu("todos");
                         }}
                       >
                         Ver a todos
@@ -1128,7 +1172,15 @@ export default function App() {
                 </td>
                 <td>
                   <select
-                    className={"inline tag-select " + (p.comida ? "t-full" : "t-gift")}
+                    className={
+                      "inline tag-select " +
+                      (!p.comida ? "t-gift" : datos.menus.length > 0 && !p.menu_id ? "missing" : "t-full")
+                    }
+                    title={
+                      p.comida && datos.menus.length > 0 && !p.menu_id
+                        ? "Falta elegir el menú de esta persona"
+                        : undefined
+                    }
                     aria-label="Modalidad"
                     value={modalidadDe(p)}
                     onChange={(ev) => cambiarModalidad(p, ev.target.value)}
