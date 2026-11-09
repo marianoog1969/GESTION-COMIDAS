@@ -1449,27 +1449,64 @@ fn exportar_csv(ruta: String, contenido: String) -> Res<String> {
     Ok(ruta.display().to_string())
 }
 
-/// Guarda el resumen en PDF generado por la interfaz.
+/// Abre un archivo con el programa predeterminado del sistema (visor de PDF).
+fn abrir_archivo(ruta: &Path) -> Res<()> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("rundll32")
+            .arg("url.dll,FileProtocolHandler")
+            .arg(ruta)
+            .creation_flags(0x0800_0000)
+            .spawn()
+            .map_err(e)?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open").arg(ruta).spawn().map_err(e)?;
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open").arg(ruta).spawn().map_err(e)?;
+    }
+    Ok(())
+}
+
+/// Guarda el resumen en PDF (generado por la interfaz) directamente en la carpeta
+/// Descargas, sin preguntar, y lo abre. Si el nombre ya existe añade « (1)», « (2)»…
 #[tauri::command(async)]
-fn exportar_pdf(ruta: String, contenido: Vec<u8>) -> Res<String> {
-    let ruta = PathBuf::from(ruta.trim());
-    if ruta.as_os_str().is_empty() {
-        return Err("Indica dónde guardar el archivo".into());
-    }
-    match ruta.extension().and_then(|x| x.to_str()) {
-        Some(x) if x.eq_ignore_ascii_case("pdf") => {}
-        _ => return Err("El archivo debe terminar en .pdf".into()),
-    }
+fn descargar_pdf(app: tauri::AppHandle, nombre: String, contenido: Vec<u8>) -> Res<String> {
     if !contenido.starts_with(b"%PDF") {
         return Err("El contenido generado no es un PDF válido".into());
     }
-    match ruta.parent() {
-        Some(d) if d.as_os_str().is_empty() || d.is_dir() => {}
-        _ => return Err("La carpeta de destino no existe o no es accesible".into()),
+    let dir = app
+        .path()
+        .download_dir()
+        .map_err(|_| "No se ha encontrado la carpeta Descargas".to_string())?;
+    if !dir.is_dir() {
+        return Err("La carpeta Descargas no existe o no es accesible".into());
+    }
+    let limpio: String = nombre
+        .chars()
+        .filter(|c| !c.is_control() && !"\\/:*?\"<>|".contains(*c))
+        .collect();
+    let base = limpio.trim().trim_end_matches(".pdf").trim().to_string();
+    let base = if base.is_empty() { "resumen".to_string() } else { base };
+    let mut ruta = dir.join(format!("{}.pdf", base));
+    let mut n = 1;
+    while ruta.exists() {
+        ruta = dir.join(format!("{} ({}).pdf", base, n));
+        n += 1;
     }
     std::fs::write(&ruta, contenido)
         .map_err(|err| format!("No se ha podido guardar el archivo: {}", err))?;
-    Ok(ruta.display().to_string())
+    // Si no se puede abrir, el archivo ya está guardado: se avisa sin fallar
+    let abierto = abrir_archivo(&ruta).is_ok();
+    Ok(format!(
+        "{}{}",
+        ruta.display(),
+        if abierto { "" } else { "\n(No se pudo abrir automáticamente)" }
+    ))
 }
 
 // ───────────────────────── Uso en varios equipos ─────────────────────────
@@ -1861,7 +1898,7 @@ pub fn run() {
             eliminar_traspaso,
             restaurar_traspaso,
             exportar_csv,
-            exportar_pdf,
+            descargar_pdf,
             info_db,
             reconectar,
             sondeo,

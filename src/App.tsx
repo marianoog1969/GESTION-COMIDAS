@@ -433,19 +433,15 @@ export default function App() {
     }
   };
 
+  /** Genera el resumen, lo guarda en Descargas y lo abre (sin preguntar dónde). */
   const exportarPdf = async () => {
     try {
       const { informePdf, nombrePdf } = await import("./informePdf");
-      const ruta = await save({
-        defaultPath: nombrePdf(datos),
-        filters: [{ name: "PDF", extensions: ["pdf"] }],
-      });
-      if (typeof ruta !== "string") return;
-      const guardado = await invoke<string>("exportar_pdf", {
-        ruta,
+      const guardado = await invoke<string>("descargar_pdf", {
+        nombre: nombrePdf(datos),
         contenido: Array.from(informePdf(datos)),
       });
-      avisar({ tipo: "ok", texto: `Resumen PDF guardado en ${guardado}` });
+      avisar({ tipo: "ok", texto: `Resumen PDF guardado en Descargas y abierto: ${guardado}` });
     } catch (err) {
       avisar({ tipo: "error", texto: String(err) });
     }
@@ -749,7 +745,7 @@ export default function App() {
           </button>
           <button
             className="btn"
-            title="Generar un resumen completo en PDF"
+            title="Genera el resumen en PDF, lo guarda en Descargas y lo abre"
             onClick={exportarPdf}
           >
             <Icono n="file" /> Resumen PDF
