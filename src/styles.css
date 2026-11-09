@@ -1631,3 +1631,6 @@ td.num, .num, .importe, .count { font-variant-numeric: tabular-nums; }
 
 .yapagado { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; white-space: nowrap; }
 .yapagado input { margin: 0; }
+
+label.check { display: flex; align-items: center; gap: 8px; flex-direction: row; margin: 10px 0 4px; font-size: 14px; cursor: pointer; }
+label.check input { width: auto; margin: 0; }

@@ -1329,10 +1329,11 @@ export default function App() {
           cobrador={nombreCobrador(defCobrador) ?? ""}
           metodo={METODOS.find((m) => m.id === ultimoMetodo)?.txt ?? ""}
           onCancel={() => setCobroRegalo(null)}
-          onCobrar={(c) => {
+          onCobrar={(c, pagado) => {
             const p = cobroRegalo;
             setCobroRegalo(null);
-            marcar(p, true, c);
+            if (pagado) marcar(p, true, c);
+            else if (c !== p.debe) guardarFila(p, { importeRegalo: c === config.precio_regalo ? -1 : c });
           }}
         />
       )}
@@ -2092,15 +2093,16 @@ function CobroRegaloDialog(props: {
   cobrador: string;
   metodo: string;
   onCancel: () => void;
-  onCobrar: (importe: number) => void;
+  onCobrar: (importe: number, pagado: boolean) => void;
 }) {
   const [txt, setTxt] = useState(deCentimos(props.persona.importe_regalo ?? props.precioGeneral));
+  const [pagado, setPagado] = useState(true);
   const c = aCentimos(txt);
   return (
     <Dialogo
-      titulo={`Cobrar el regalo a ${props.persona.nombre}`}
+      titulo={`Regalo de ${props.persona.nombre}`}
       onCancel={props.onCancel}
-      onSubmit={() => c !== null && props.onCobrar(c)}
+      onSubmit={() => c !== null && props.onCobrar(c, pagado)}
       ancho={420}
     >
       <label>
@@ -2116,16 +2118,20 @@ function CobroRegaloDialog(props: {
           <span>€</span>
         </div>
       </label>
+      <label className="check">
+        <input type="checkbox" checked={pagado} onChange={(ev) => setPagado(ev.target.checked)} />
+        Marcar como pagado
+      </label>
       <p className="muted">
-        General: {eur(props.precioGeneral)}. Se cobra {props.metodo ? `en ${props.metodo.toLowerCase()}` : ""}
-        {props.cobrador ? ` por ${props.cobrador}` : ""}; se cambia en la barra «Al cobrar».
+        General: {eur(props.precioGeneral)}.{pagado ? " Se cobra" : " Solo se guarda el importe; queda pendiente."} {pagado && props.metodo ? ` en ${props.metodo.toLowerCase()}` : ""}
+        {pagado && props.cobrador ? ` por ${props.cobrador}` : ""}{pagado ? "; se cambia en la barra «Al cobrar»." : ""}
       </p>
       <div className="actions">
         <button type="button" className="btn" onClick={props.onCancel}>
           Cancelar
         </button>
         <button type="submit" className="btn primary" disabled={c === null}>
-          Cobrar {c !== null ? eur(c) : ""}
+          {pagado ? "Cobrar" : "Guardar"} {c !== null ? eur(c) : ""}
         </button>
       </div>
     </Dialogo>
