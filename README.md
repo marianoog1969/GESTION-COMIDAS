@@ -18,13 +18,19 @@ Desarrollo: `npm run tauri dev` (la base de datos se crea junto al ejecutable de
 
 1. **Primeros pasos**: mientras falten precios o participantes, un panel guía los pasos (contraseña → precios → cobradores → participantes).
 2. **🔒 Administrador**: la primera vez pide crear la contraseña y abre directamente los parámetros; después sirve para desbloquear. Desbloqueado aparecen **⚙ Parámetros**, **🔑** (cambiar contraseña) y **🔓 Bloquear**.
-3. **⚙ Parámetros**: nombre del evento, fecha/lugar, regalo, precio de la comida e importe fijo del regalo por persona (con vista previa de lo que paga cada uno) y la lista de **cobradores** (se guardan al momento).
-4. **Participantes, en la propia tabla**: la fila superior añade personas (<kbd>Ctrl</kbd>+<kbd>N</kbd>; avisa si el nombre ya existe). Nombre, modalidad y notas se editan en la celda (Enter guarda, Esc cancela).
-5. **Cobrar**: en la barra **Al cobrar** se elige quién recoge el dinero y el método (efectivo / Bizum); se recuerda entre sesiones. El botón **Cobrar** de cada fila registra el pago con esa elección. En filas pagadas, cobrador y método se cambian en la columna *Cobro*; pulsando **✓ Pagado** se anula.
+3. **⚙ Parámetros**: nombre del evento, fecha/lugar, regalo, precio de la comida e importe general del regalo por persona (con vista previa de lo que paga cada uno), los **tipos de menú** y la lista de **cobradores** (menús y cobradores se guardan al momento).
+4. **Participantes, en la propia tabla**: la fila superior añade personas (<kbd>Ctrl</kbd>+<kbd>N</kbd>; avisa si el nombre ya existe). Nombre, modalidad (solo regalo o el menú elegido), regalo y notas se editan en la celda (Enter guarda, Esc cancela).
+5. **Cobrar**: en la barra **Al cobrar** se elige quién recoge el dinero y el método (efectivo / Bizum); se recuerda entre sesiones. El botón **Cobrar** de cada fila registra el pago con esa elección. En filas pagadas, cobrador y método se cambian en la columna *Cobro*; la **fecha de cobro** también se puede corregir; pulsando **✓ Pagado** se anula.
+   Se cobra todo o nada: no hay cobros parciales.
 6. **Deshacer**: cobrar, anular y eliminar muestran un aviso con **Deshacer**.
 7. **Filtrar y ordenar**: buscador por nombre o notas (<kbd>Ctrl</kbd>+<kbd>F</kbd>, sin distinguir tildes), pestañas con contadores, tarjetas *Cobrado* / *Falta por cobrar* clicables y columnas ordenables.
 8. **¿Dónde está el dinero?**: total en efectivo y Bizum y lo que tiene cada cobrador.
 9. **🖨 Imprimir**: listado limpio con estado de cada persona y resumen al pie.
+
+## Menús y regalo por persona
+
+- **Tipos de menú** (⚙ Parámetros): solo nombre, sin precio (p. ej. *Carne*, *Pescado*). En la columna *Modalidad* se elige el menú de cada persona o *Solo regalo*. No se puede eliminar un menú que alguien tenga elegido. El informe CSV incluye cuántas personas hay por menú.
+- **Regalo propio**: la columna *Regalo* muestra lo que aporta cada persona. Por defecto es el importe general; si alguien da más (o menos), se escribe su importe en la celda y se resalta en negrita. Si se vuelve a escribir el importe general, recupera el valor por defecto. Los totales, el *Importe* y el dinero de cada cobrador usan el regalo propio.
 
 ## Sacar los datos fuera
 

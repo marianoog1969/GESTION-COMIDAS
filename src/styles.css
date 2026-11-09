@@ -1588,3 +1588,11 @@ tfoot td {
     font-size: 12px;
   }
 }
+
+/* Regalo propio por persona y fecha de cobro editable */
+.c-regalo { width: 92px; }
+.c-regalo input.cell { text-align: right; }
+.c-regalo input.cell.custom { font-weight: 600; color: var(--accent, #1d4ed8); }
+input.fecha-edit { width: 128px; font-size: 12px; padding: 2px 4px; }
+.no-print { }
+@media print { .no-print { display: none !important; } }
