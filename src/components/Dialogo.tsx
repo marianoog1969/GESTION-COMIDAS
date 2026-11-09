@@ -1,3 +1,4 @@
+import Icono from "./Icono";
 import { useEffect } from "react";
 
 /** Ventana modal: Esc o clic fuera para cerrar; Enter envía el formulario. */
@@ -39,7 +40,7 @@ export default function Dialogo(props: {
             aria-label="Cerrar"
             onClick={props.onCancel}
           >
-            ✕
+            <Icono n="x" />
           </button>
         </div>
         {props.children}

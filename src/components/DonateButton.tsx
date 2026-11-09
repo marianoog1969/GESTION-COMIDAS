@@ -1,3 +1,4 @@
+import Icono from "./Icono";
 import { invoke } from "@tauri-apps/api/core";
 import { PAYPAL_URL } from "../credits";
 
@@ -15,7 +16,7 @@ export default function DonateButton({ compact = false }: Props) {
       onClick={abrir}
       title="Apoya el desarrollo con una donación"
     >
-      ♥{compact ? "" : " Donar"}
+      <Icono n="heart" />{compact ? "" : " Donar"}
     </button>
   );
 }

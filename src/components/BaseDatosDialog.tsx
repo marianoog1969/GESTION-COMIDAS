@@ -1,3 +1,4 @@
+import Icono from "./Icono";
 import { Conectado, InfoDb } from "../types";
 import Dialogo from "./Dialogo";
 
@@ -14,7 +15,7 @@ export default function BaseDatosDialog(props: {
     <Dialogo titulo="Base de datos compartida" onCancel={props.onCancel} ancho={600}>
       {info && (
         <div className={"db-actual " + (info.conectado ? "good" : "bad")}>
-          <div className="db-tipo">{info.conectado ? "🌐 Conectado" : "⚠ Sin conexión"}</div>
+          <div className="db-tipo">{info.conectado ? <><Icono n="globe" /> Conectado</> : <><Icono n="alert" /> Sin conexión</>}</div>
           <code className="db-ruta">{info.ruta}</code>
           <div className="muted small">
             {info.origen === "ini"
@@ -27,7 +28,7 @@ export default function BaseDatosDialog(props: {
               <span className="muted small">Conectados ahora:</span>
               {props.conectados.map((c) => (
                 <span key={c.equipo + c.usuario} className="pill">
-                  🖥 {c.equipo}
+                  <Icono n="monitor" /> {c.equipo}
                   {c.usuario && <span className="muted"> · {c.usuario}</span>}
                   {c.yo && <b> (tú)</b>}
                 </span>

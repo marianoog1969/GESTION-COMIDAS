@@ -1606,3 +1606,25 @@ input.fecha-edit { width: 128px; font-size: 12px; padding: 2px 4px; }
 .mchip.warn.on { background: var(--warn, #8a5a00); color: #fff; }
 td select.tag-select { min-width: 178px; }
 @media print { .menubar { display: none; } }
+
+/* ─── Aspecto profesional: iconos de línea y pulido general ─── */
+.ico { display: inline-block; vertical-align: -0.18em; margin-right: 0.4em; flex: none; }
+.ico:only-child { margin-right: 0; }
+.empty-ico .ico { width: 38px; height: 38px; margin: 0; color: var(--line-strong); stroke-width: 1.5; }
+.icon-btn .ico { width: 16px; height: 16px; }
+.toast-ico .ico { margin: 0; vertical-align: -0.2em; }
+.step-ico .ico { width: 13px; height: 13px; stroke-width: 3; }
+.btn.donate .ico { fill: currentColor; }
+.when-idle .ico, .when-hover .ico { margin-right: 0.3em; }
+.status .ico { width: 1em; height: 1em; }
+.caja-nombre .ico { color: var(--muted); }
+.mchip .ico, .db-tipo .ico { margin-right: 0.3em; }
+.btn { font-weight: 500; letter-spacing: 0.005em; }
+.btn:not(.primary):not(.donate):hover:not(:disabled) { background: var(--primary-soft); }
+.btn .ico { color: var(--muted); }
+.btn.primary .ico { color: inherit; }
+.btn:hover:not(:disabled) .ico { color: var(--primary); }
+.btn.primary:hover:not(:disabled) .ico { color: inherit; }
+body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+th { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+td.num, .num, .importe, .count { font-variant-numeric: tabular-nums; }

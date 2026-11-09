@@ -23,6 +23,7 @@ import DonateButton from "./components/DonateButton";
 import { ToastStack, useToasts } from "./components/Toasts";
 import BaseDatosDialog from "./components/BaseDatosDialog";
 import Dialogo from "./components/Dialogo";
+import Icono from "./components/Icono";
 import CeldaTexto from "./components/CeldaTexto";
 import CeldaSelect from "./components/CeldaSelect";
 import GastosView from "./components/Gastos";
@@ -59,9 +60,9 @@ const guardarLS = (k: string, v: string) => {
   }
 };
 
-const METODOS: { id: string; txt: string; ico: string }[] = [
-  { id: "efectivo", txt: "Efectivo", ico: "💶" },
-  { id: "bizum", txt: "Bizum", ico: "📱" },
+const METODOS: { id: string; txt: string; ico: "cash" | "phone" }[] = [
+  { id: "efectivo", txt: "Efectivo", ico: "cash" },
+  { id: "bizum", txt: "Bizum", ico: "phone" },
 ];
 
 export default function App() {
@@ -654,11 +655,11 @@ export default function App() {
         <div className="titulo">
           <h1>{config.evento || "Comida de celebración"}</h1>
           <div className="meta">
-            {config.fecha && <span>📅 {config.fecha}</span>}
-            {config.regalo_desc && <span>🎁 {config.regalo_desc}</span>}
+            {config.fecha && <span><Icono n="calendar" /> {config.fecha}</span>}
+            {config.regalo_desc && <span><Icono n="gift" /> {config.regalo_desc}</span>}
             {!sinPrecios && (
               <span>
-                🍽 Comida {eur(config.precio_comida)} · 🎁 Regalo{" "}
+                <Icono n="menu" /> Comida {eur(config.precio_comida)} · <Icono n="gift" /> Regalo{" "}
                 {eur(config.precio_regalo)} <span className="muted">por persona</span>
               </span>
             )}
@@ -675,14 +676,14 @@ export default function App() {
             <div className="admin-group" role="group" aria-label="Administración">
               <span className="admin-badge">Administrador</span>
               <button className="btn ghost" onClick={() => setModal("config")}>
-                ⚙ Parámetros
+                <Icono n="settings" /> Parámetros
               </button>
               <button
                 className="btn ghost"
                 title="Cambiar contraseña"
                 onClick={() => setModal("password")}
               >
-                🔑
+                <Icono n="key" />
               </button>
               <button
                 className="btn ghost"
@@ -693,7 +694,7 @@ export default function App() {
                   })
                 }
               >
-                🔓 Bloquear
+                <Icono n="unlock" /> Bloquear
               </button>
             </div>
           ) : (
@@ -702,7 +703,7 @@ export default function App() {
               title="Desbloquear para cambiar precios y cobradores"
               onClick={() => abrirAdmin(null)}
             >
-              🔒 Administrador
+              <Icono n="lock" /> Administrador
             </button>
           )}
           <button
@@ -710,17 +711,17 @@ export default function App() {
             title="Guardar un informe en CSV para abrirlo con Excel"
             onClick={exportar}
           >
-            ⬇ Exportar
+            <Icono n="download" /> Exportar
           </button>
           <button
             className="btn"
             title="Generar un resumen completo en PDF"
             onClick={exportarPdf}
           >
-            📄 Resumen PDF
+            <Icono n="file" /> Resumen PDF
           </button>
           <button className="btn" title="Imprimir listado" onClick={() => window.print()}>
-            🖨 Imprimir
+            <Icono n="print" /> Imprimir
           </button>
           <button className="btn" title="Acerca de y manual" onClick={() => setModal("about")}>
             ℹ
@@ -754,7 +755,7 @@ export default function App() {
           <ol>
             {pasos.map((p, i) => (
               <li key={i} className={p.hecho ? "done" : ""}>
-                <span className="step-ico">{p.hecho ? "✓" : i + 1}</span>
+                <span className="step-ico">{p.hecho ? <Icono n="check" /> : i + 1}</span>
                 <span className="step-txt">{p.txt}</span>
                 {!p.hecho && (
                   <button className="btn small" onClick={p.accion}>
@@ -792,7 +793,7 @@ export default function App() {
         </Card>
         {todoCobrado ? (
           <Card titulo="Falta por cobrar" valor="¡Todo cobrado!" clase="good done">
-            No queda nadie pendiente 🎉
+            No queda nadie pendiente
           </Card>
         ) : (
           <Card
@@ -817,7 +818,7 @@ export default function App() {
               title={`Ver solo a quien ha elegido ${m.nombre}`}
               onClick={() => setFiltroMenu(filtroMenu === `m:${m.id}` ? "todos" : `m:${m.id}`)}
             >
-              🍽 {m.nombre} <b>{m.personas}</b>
+              <Icono n="menu" /> {m.nombre} <b>{m.personas}</b>
             </button>
           ))}
           {sinMenu > 0 && (
@@ -826,7 +827,7 @@ export default function App() {
               title="Ver a quien aún no tiene menú elegido"
               onClick={() => setFiltroMenu(filtroMenu === "sin" ? "todos" : "sin")}
             >
-              ⚠ Sin elegir <b>{sinMenu}</b>
+              <Icono n="alert" /> Sin elegir <b>{sinMenu}</b>
             </button>
           )}
           <button
@@ -834,7 +835,7 @@ export default function App() {
             title="Ver a quien solo aporta al regalo"
             onClick={() => setFiltroMenu(filtroMenu === "regalo" ? "todos" : "regalo")}
           >
-            🎁 Solo regalo <b>{resumen.solo_regalo}</b>
+            <Icono n="gift" /> Solo regalo <b>{resumen.solo_regalo}</b>
           </button>
           {filtroMenu !== "todos" && (
             <button className="btn linklike" onClick={() => setFiltroMenu("todos")}>
@@ -862,7 +863,7 @@ export default function App() {
               En manos de los cobradores <b>{eur(resumen.cobrado - resumen.gastado)}</b>
             </span>
             <span className="muted small">
-              Cobrado: 💶 {eur(resumen.cobrado_efectivo)} · 📱 {eur(resumen.cobrado_bizum)}
+              Cobrado: <Icono n="cash" /> {eur(resumen.cobrado_efectivo)} · <Icono n="phone" /> {eur(resumen.cobrado_bizum)}
               {resumen.gastado > 0 && <> · gastado {eur(resumen.gastado)}</>}
             </span>
             {reales.length >= 2 && (
@@ -874,7 +875,7 @@ export default function App() {
                   window.setTimeout(() => nuevoTraspasoRef.current?.focus(), 50);
                 }}
               >
-                ⇄ Traspasar
+                <Icono n="swap" /> Traspasar
               </button>
             )}
           </div>
@@ -886,7 +887,7 @@ export default function App() {
                   key={c.id}
                 >
                   <div className="caja-nombre">
-                    {c.id === 0 ? "⚠ " : "👤 "}
+                    {c.id === 0 ? <Icono n="alert" /> : <Icono n="user" />}
                     {c.nombre}
                   </div>
                   <div className="caja-total" title="Lo que debería tener ahora">
@@ -898,11 +899,11 @@ export default function App() {
                       {c.efectivo > 0 && c.bizum > 0 && (
                         <span className="muted">
                           {" "}
-                          (💶 {eur(c.efectivo)} · 📱 {eur(c.bizum)})
+                          (<Icono n="cash" /> {eur(c.efectivo)} · <Icono n="phone" /> {eur(c.bizum)})
                         </span>
                       )}
-                      {c.efectivo > 0 && c.bizum === 0 && <span className="muted"> 💶</span>}
-                      {c.bizum > 0 && c.efectivo === 0 && <span className="muted"> 📱</span>}
+                      {c.efectivo > 0 && c.bizum === 0 && <span className="muted"> <Icono n="cash" /></span>}
+                      {c.bizum > 0 && c.efectivo === 0 && <span className="muted"> <Icono n="phone" /></span>}
                     </span>
                     {c.gastado > 0 && <span className="neg">− gastado {eur(c.gastado)}</span>}
                     {c.recibido > 0 && (
@@ -926,7 +927,7 @@ export default function App() {
           className={vista === "personas" ? "on" : ""}
           onClick={() => cambiarVista("personas")}
         >
-          👥 Participantes <span className="count">{resumen.total_personas}</span>
+          <Icono n="users" /> Participantes <span className="count">{resumen.total_personas}</span>
         </button>
         <button
           role="tab"
@@ -934,7 +935,7 @@ export default function App() {
           className={vista === "gastos" ? "on" : ""}
           onClick={() => cambiarVista("gastos")}
         >
-          🎁 Gastos del regalo <span className="count">{resumen.gastos}</span>
+          <Icono n="gift" /> Gastos del regalo <span className="count">{resumen.gastos}</span>
           {resumen.cobrado_regalo > 0 && (
             <span className={"vista-extra" + (resumen.disponible_regalo < 0 ? " bad" : "")}>
               {resumen.disponible_regalo < 0 ? "excedido " : "quedan "}
@@ -948,7 +949,7 @@ export default function App() {
           className={vista === "traspasos" ? "on" : ""}
           onClick={() => cambiarVista("traspasos")}
         >
-          ⇄ Traspasos <span className="count">{resumen.traspasos}</span>
+          <Icono n="swap" /> Traspasos <span className="count">{resumen.traspasos}</span>
         </button>
       </nav>
 
@@ -978,7 +979,7 @@ export default function App() {
           />
           {busqueda && (
             <button className="clear" aria-label="Borrar búsqueda" onClick={() => setBusqueda("")}>
-              ✕
+              <Icono n="x" />
             </button>
           )}
         </div>
@@ -1004,7 +1005,7 @@ export default function App() {
             title="Copiar la lista de quien falta por pagar, para pegarla en WhatsApp o en un correo"
             onClick={copiarPendientes}
           >
-            📋 Copiar lista
+            <Icono n="clipboard" /> Copiar lista
           </button>
         )}
 
@@ -1027,7 +1028,7 @@ export default function App() {
             >
               {reales.map((c) => (
                 <option key={c.id} value={c.id}>
-                  👤 {c.nombre}
+                  <Icono n="user" /> {c.nombre}
                 </option>
               ))}
             </select>
@@ -1042,7 +1043,7 @@ export default function App() {
                 className={ultimoMetodo === m.id ? "on" : ""}
                 onClick={() => elegirMetodo(m.id)}
               >
-                {m.ico} {m.txt}
+                <Icono n={m.ico} /> {m.txt}
               </button>
             ))}
           </div>
@@ -1110,7 +1111,7 @@ export default function App() {
                 <td colSpan={8} className="empty">
                   {datos.participantes.length === 0 ? (
                     <>
-                      <div className="empty-ico">🎉</div>
+                      <div className="empty-ico"><Icono n="users" size={36} /></div>
                       Todavía no hay nadie apuntado.
                       <br />
                       Escribe un nombre en la fila de arriba y pulsa <kbd>Enter</kbd>.
@@ -1149,8 +1150,8 @@ export default function App() {
                       title="Pagado · pulsa para marcar como pendiente"
                       onClick={() => marcar(p, false)}
                     >
-                      <span className="when-idle">✓ Pagado</span>
-                      <span className="when-hover">↺ Anular</span>
+                      <span className="when-idle"><Icono n="check" /> Pagado</span>
+                      <span className="when-hover"><Icono n="undo" /> Anular</span>
                     </button>
                   ) : (
                     <button
@@ -1187,15 +1188,15 @@ export default function App() {
                   >
                     {datos.menus.length === 0 || (p.comida && !p.menu_id) ? (
                       <option value="comida">
-                        🍽 {datos.menus.length === 0 ? "Comida + regalo" : "Comida (elegir menú)"}
+                        {datos.menus.length === 0 ? "Comida + regalo" : "Comida (elegir menú)"}
                       </option>
                     ) : null}
                     {datos.menus.map((m) => (
                       <option key={m.id} value={`m:${m.id}`}>
-                        🍽 {m.nombre} + regalo
+                        {m.nombre} + regalo
                       </option>
                     ))}
-                    <option value="regalo">🎁 Solo regalo</option>
+                    <option value="regalo">Solo regalo</option>
                   </select>
                 </td>
                 <td className="num c-regalo">
@@ -1241,7 +1242,7 @@ export default function App() {
                       )}
                       <CeldaSelect
                         valor={p.metodo}
-                        opciones={METODOS.map((m) => ({ id: m.id, txt: `${m.ico} ${m.txt}` }))}
+                        opciones={METODOS.map((m) => ({ id: m.id, txt: m.txt }))}
                         etiqueta="Método de pago"
                         falta="¿Cómo?"
                         onChange={(v) => cambiarCobro(p, { metodo: v })}
@@ -1266,7 +1267,7 @@ export default function App() {
                     aria-label={`Eliminar a ${p.nombre}`}
                     onClick={() => eliminar(p)}
                   >
-                    🗑
+                    <Icono n="trash" />
                   </button>
                 </td>
               </tr>
@@ -1391,7 +1392,7 @@ function ChipConexion(props: {
   if (props.sinConexion || !info.conectado) {
     return (
       <button className="btn conn bad" onClick={props.onClick} title={info.ruta}>
-        ⚠ Sin conexión
+        <Icono n="alert" /> Sin conexión
       </button>
     );
   }
@@ -1519,7 +1520,7 @@ function PasswordInput(props: {
           title={ver ? "Ocultar" : "Mostrar"}
           onClick={() => setVer((v) => !v)}
         >
-          {ver ? "🙈" : "👁"}
+          {ver ? <Icono n="eyeoff" /> : <Icono n="eye" />}
         </button>
       </div>
     </label>
@@ -1802,7 +1803,7 @@ function ConfigDialog(props: {
         {props.menus.length === 0 && <span className="muted">Aún no hay menús.</span>}
         {props.menus.map((m) => (
           <span key={m.id} className="chip-x">
-            🍽 {m.nombre}
+            <Icono n="menu" /> {m.nombre}
             {m.personas > 0 && (
               <span className="muted">
                 {" "}
@@ -1816,7 +1817,7 @@ function ConfigDialog(props: {
               disabled={m.personas > 0}
               onClick={() => quitarMenu(m)}
             >
-              ✕
+              <Icono n="x" />
             </button>
           </span>
         ))}
@@ -1853,7 +1854,7 @@ function ConfigDialog(props: {
         )}
         {props.cobradores.map((c) => (
           <span key={c.id} className="chip-x">
-            👤 {c.nombre}
+            <Icono n="user" /> {c.nombre}
             {c.cobros > 0 && (
               <span className="muted">
                 {" "}
@@ -1871,7 +1872,7 @@ function ConfigDialog(props: {
               disabled={c.cobros > 0 || c.gastos > 0 || c.traspasos > 0}
               onClick={() => quitarCobrador(c)}
             >
-              ✕
+              <Icono n="x" />
             </button>
           </span>
         ))}
@@ -1973,14 +1974,14 @@ function FilaNueva(props: {
           value={modalidad}
           onChange={(ev) => setModalidad(ev.target.value)}
         >
-          {props.menus.length === 0 && <option value="comida">🍽 Comida + regalo</option>}
-          {props.menus.length > 0 && <option value="comida">🍽 Comida (elegir menú)</option>}
+          {props.menus.length === 0 && <option value="comida">Comida + regalo</option>}
+          {props.menus.length > 0 && <option value="comida">Comida (elegir menú)</option>}
           {props.menus.map((m) => (
             <option key={m.id} value={`m:${m.id}`}>
-              🍽 {m.nombre} + regalo
+              {m.nombre} + regalo
             </option>
           ))}
-          <option value="regalo">🎁 Solo regalo</option>
+          <option value="regalo">Solo regalo</option>
         </select>
       </td>
       <td></td>

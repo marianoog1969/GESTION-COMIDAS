@@ -1,3 +1,4 @@
+import Icono from "./Icono";
 import { RefObject, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Cobrador, Traspaso, aCentimos, deCentimos, eur, fmtFecha, hoy, normalizar } from "../types";
@@ -57,10 +58,10 @@ export default function TraspasosView(props: {
     return (
       <div className="tablewrap">
         <div className="empty">
-          <div className="empty-ico">⇄</div>
+          <div className="empty-ico"><Icono n="swap" size={36} /></div>
           Para traspasar dinero hacen falta al menos <b>dos cobradores</b>.
           <br />
-          Añádelos en <b>⚙ Parámetros</b> (modo administrador).
+          Añádelos en <b>Parámetros</b> (modo administrador).
         </div>
       </div>
     );
@@ -102,7 +103,7 @@ export default function TraspasosView(props: {
                 <td colSpan={7} className="empty">
                   {props.traspasos.length === 0 ? (
                     <>
-                      <div className="empty-ico">⇄</div>
+                      <div className="empty-ico"><Icono n="swap" size={36} /></div>
                       Aún no hay traspasos entre cobradores.
                     </>
                   ) : (
@@ -170,7 +171,7 @@ export default function TraspasosView(props: {
                     aria-label={`Eliminar el traspaso de ${t.de} a ${t.a}`}
                     onClick={() => eliminar(t)}
                   >
-                    🗑
+                    <Icono n="trash" />
                   </button>
                 </td>
               </tr>
@@ -214,7 +215,7 @@ function SelectCobrador(props: {
       )}
       {props.cobradores.map((c) => (
         <option key={c.id} value={c.id}>
-          👤 {c.nombre}
+          <Icono n="user" /> {c.nombre}
         </option>
       ))}
     </select>
@@ -302,7 +303,7 @@ function FilaTraspasoNueva(props: {
             setA(deEf);
           }}
         >
-          ⇄
+          <Icono n="swap" />
         </button>
       </td>
       <td>

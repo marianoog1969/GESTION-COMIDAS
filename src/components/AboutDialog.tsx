@@ -30,11 +30,11 @@ export default function AboutDialog({ onClose }: Props) {
           <div className="manual">
             <ol>
               <li>
-                Pulsa <b>🔒 Administrador</b> e introduce la contraseña (la primera vez se
+                Pulsa <b>Administrador</b> e introduce la contraseña (la primera vez se
                 crea).
               </li>
               <li>
-                En <b>⚙ Parámetros</b> fija el precio de la comida, la aportación al regalo,
+                En <b>Parámetros</b> fija el precio de la comida, la aportación al regalo,
                 los datos del evento y los cobradores.
               </li>
               <li>
@@ -55,12 +55,12 @@ export default function AboutDialog({ onClose }: Props) {
                 lista.
               </li>
               <li>
-                En <b>🎁 Gastos del regalo</b> apunta lo que cada cobrador paga con el dinero
+                En <b>Gastos del regalo</b> apunta lo que cada cobrador paga con el dinero
                 recogido. Se descuenta de lo recaudado para el regalo y de lo que tiene ese
                 cobrador en «¿Dónde está el dinero?».
               </li>
               <li>
-                En <b>⇄ Traspasos</b> apunta el dinero que un cobrador le pasa a otro. El total
+                En <b>Traspasos</b> apunta el dinero que un cobrador le pasa a otro. El total
                 recaudado no cambia, solo quién lo tiene.
               </li>
               <li>
@@ -70,8 +70,8 @@ export default function AboutDialog({ onClose }: Props) {
                 <kbd>Ctrl</kbd>+<kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> cambia de pestaña.
               </li>
               <li>
-                <b>📋 Copiar lista</b> (en el filtro «Pendientes») copia quién falta por pagar,
-                para pegarlo en WhatsApp o en un correo. <b>⬇ Exportar</b> guarda un informe
+                <b>Copiar lista</b> (en el filtro «Pendientes») copia quién falta por pagar,
+                para pegarlo en WhatsApp o en un correo. <b>Exportar</b> guarda un informe
                 completo en CSV que se abre con Excel.
               </li>
               <li>

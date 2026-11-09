@@ -1,3 +1,4 @@
+import Icono from "./Icono";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface Toast {
@@ -60,7 +61,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
       onMouseLeave={() => setPausa(false)}
     >
       <span className="toast-ico">
-        {toast.tipo === "error" ? "⚠" : toast.tipo === "ok" ? "✓" : "ℹ"}
+        <Icono n={toast.tipo === "error" ? "alert" : toast.tipo === "ok" ? "check" : "info"} />
       </span>
       <span className="toast-txt">{toast.texto}</span>
       {toast.deshacer && (
@@ -75,7 +76,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
         </button>
       )}
       <button className="toast-x" aria-label="Cerrar aviso" onClick={onClose}>
-        ✕
+        <Icono n="x" />
       </button>
       {!pausa && (
         <span className="toast-timer" style={{ animationDuration: duracion + "ms" }} />

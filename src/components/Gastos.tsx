@@ -1,3 +1,4 @@
+import Icono from "./Icono";
 import { RefObject, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -135,7 +136,7 @@ export default function GastosView(props: {
                 <td colSpan={5} className="empty">
                   {props.gastos.length === 0 ? (
                     <>
-                      <div className="empty-ico">🧾</div>
+                      <div className="empty-ico"><Icono n="receipt" size={36} /></div>
                       Aún no hay gastos.
                       <br />
                       Apunta en la fila de arriba lo que se vaya comprando para el regalo
@@ -198,7 +199,7 @@ export default function GastosView(props: {
                     aria-label={`Eliminar el gasto ${g.concepto}`}
                     onClick={() => eliminar(g)}
                   >
-                    🗑
+                    <Icono n="trash" />
                   </button>
                 </td>
               </tr>
@@ -293,7 +294,7 @@ function FilaGastoNueva(props: {
           >
             {props.cobradores.map((c) => (
               <option key={c.id} value={c.id}>
-                👤 {c.nombre}
+                <Icono n="user" /> {c.nombre}
               </option>
             ))}
           </select>
