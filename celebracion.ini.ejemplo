@@ -1,0 +1,9 @@
+; Configuración opcional de Celebración.
+; Renombra este archivo a "celebracion.ini" y déjalo junto a celebracion.exe
+; solo si la base de datos NO debe estar en la misma carpeta que el programa
+; (por ejemplo, porque esa carpeta es de solo lectura para los usuarios).
+;
+; Todos los usuarios necesitan permiso de escritura en la carpeta de la base.
+; Se admiten rutas relativas a la carpeta del .exe.
+
+datos=\\servidor\Comun\Celebraciones\datos\celebracion.db
