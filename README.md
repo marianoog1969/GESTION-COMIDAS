@@ -22,6 +22,7 @@ Desarrollo: `npm run tauri dev` (la base de datos se crea junto al ejecutable de
 4. **Participantes, en la propia tabla**: la fila superior añade personas (<kbd>Ctrl</kbd>+<kbd>N</kbd>; avisa si el nombre ya existe). Nombre, modalidad (solo regalo o el menú elegido), regalo y notas se editan en la celda (Enter guarda, Esc cancela).
 5. **Cobrar**: en la barra **Al cobrar** se elige quién recoge el dinero y el método (efectivo / Bizum); se recuerda entre sesiones. El botón **Cobrar** de cada fila registra el pago con esa elección. En filas pagadas, cobrador y método se cambian en la columna *Cobro*; la **fecha de cobro** también se puede corregir; pulsando **✓ Pagado** se anula.
    Se cobra todo o nada: no hay cobros parciales.
+   A quien solo aporta al regalo, **Cobrar** abre una ventana para ajustar el importe antes de cobrar. En la fila de alta se puede indicar el importe del regalo y marcar **Ya ha pagado** para añadir a la persona ya cobrada (con el cobrador y método de la barra *Al cobrar*).
 6. **Deshacer**: cobrar, anular y eliminar muestran un aviso con **Deshacer**.
 7. **Filtrar y ordenar**: buscador por nombre o notas (<kbd>Ctrl</kbd>+<kbd>F</kbd>, sin distinguir tildes), pestañas con contadores, **resumen por menú** bajo las tarjetas (cada botón filtra por ese menú; «Sin elegir» avisa de quien aún no tiene menú y se marca en ámbar en la tabla), tarjetas *Cobrado* / *Falta por cobrar* clicables y columnas ordenables.
 8. **¿Dónde está el dinero?**: total en efectivo y Bizum y lo que tiene cada cobrador.

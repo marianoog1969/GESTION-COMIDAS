@@ -77,6 +77,8 @@ export default function App() {
   const [filtro, setFiltro] = useState<Filtro>("todos");
   /** Filtro por menú: «todos», «sin» (comida sin menú), «regalo» o «m:ID» */
   const [filtroMenu, setFiltroMenu] = useState("todos");
+  /** Persona «solo regalo» a la que se está cobrando (permite cambiar el importe) */
+  const [cobroRegalo, setCobroRegalo] = useState<Participante | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [orden, setOrden] = useState<Orden>({ col: "nombre", dir: 1 });
   const [ultimoCobrador, setUltimoCobrador] = useState<number | null>(() => {
@@ -488,29 +490,43 @@ export default function App() {
       fecha: p.pagado ? p.fecha_pago : null,
     });
 
-  const marcar = (p: Participante, pagado: boolean) => {
+  const marcar = (p: Participante, pagado: boolean, importe?: number) => {
     resaltar("p" + p.id);
     const metodoTxt = METODOS.find((m) => m.id === ultimoMetodo)?.txt ?? "";
     const quien = nombreCobrador(defCobrador);
     ejecutar(
-      () =>
-        invoke("marcar_pagado", {
+      async () => {
+        // Importe del regalo cambiado al cobrar (personas «solo regalo»)
+        if (pagado && importe !== undefined && importe !== p.debe) {
+          await invoke("actualizar_participante", {
+            id: p.id,
+            importeRegalo: importe === config.precio_regalo ? -1 : importe,
+          });
+        }
+        await invoke("marcar_pagado", {
           id: p.id,
           pagado,
           cobradorId: pagado ? defCobrador : null,
           metodo: pagado ? ultimoMetodo : null,
           // Lo que estaba viendo: si otro equipo lo ha cambiado, se rechaza
           desde: p.pagado,
-        }),
+        });
+      },
       {
         texto: pagado
-          ? `${p.nombre}: ${eur(p.debe)} cobrados en ${metodoTxt.toLowerCase()}${
+          ? `${p.nombre}: ${eur(importe ?? p.debe)} cobrados en ${metodoTxt.toLowerCase()}${
               quien ? ` por ${quien}` : ""
             }`
           : `${p.nombre} vuelve a estar pendiente`,
         deshacer: () => ejecutar(() => restaurarPago(p)),
       }
     );
+  };
+
+  /** Cobrar: a quien solo aporta al regalo se le pregunta antes el importe. */
+  const cobrar = (p: Participante) => {
+    if (p.comida) marcar(p, true);
+    else setCobroRegalo(p);
   };
 
   const cambiarCobro = (
@@ -569,13 +585,12 @@ export default function App() {
 
   const anadir = (p: Partial<Participante>) =>
     ejecutar(
-      () =>
-        invoke("guardar_participante", {
+      async () => {
+        const id = await invoke<number>("guardar_participante", {
           participante: {
             id: null,
             nombre: "",
             comida: true,
-            pagado: false,
             fecha_pago: null,
             notas: "",
             importe_regalo: null,
@@ -586,9 +601,28 @@ export default function App() {
             menu_id: null,
             menu: null,
             ...p,
+            pagado: false,
           },
-        }),
-      { texto: `${(p.nombre ?? "").trim()} añadido/a` }
+        });
+        // «Ya ha pagado»: se registra el cobro con lo elegido en la barra «Al cobrar»
+        if (p.pagado) {
+          try {
+            await invoke("marcar_pagado", {
+              id,
+              pagado: true,
+              cobradorId: defCobrador,
+              metodo: ultimoMetodo,
+              desde: false,
+            });
+          } catch (err) {
+            avisar({
+              tipo: "error",
+              texto: `${(p.nombre ?? "").trim()} añadido/a, pero sin cobrar: ${String(err)}`,
+            });
+          }
+        }
+      },
+      { texto: `${(p.nombre ?? "").trim()} añadido/a${p.pagado ? " y cobrado/a" : ""}` }
     );
 
   const eliminar = (p: Participante) =>
@@ -972,7 +1006,7 @@ export default function App() {
               if (ev.key === "Escape") setBusqueda("");
               if (ev.key === "Enter" && unicoPendiente) {
                 ev.preventDefault();
-                marcar(unicoPendiente, true);
+                cobrar(unicoPendiente);
                 setBusqueda("");
               }
             }}
@@ -1157,7 +1191,7 @@ export default function App() {
                     <button
                       className="status unpaid"
                       title={`Registrar el cobro de ${eur(p.debe)}`}
-                      onClick={() => marcar(p, true)}
+                      onClick={() => cobrar(p)}
                     >
                       Cobrar
                     </button>
@@ -1287,6 +1321,21 @@ export default function App() {
       </p>
 
       <ToastStack toasts={toasts} onClose={cerrar} />
+
+      {cobroRegalo && (
+        <CobroRegaloDialog
+          persona={cobroRegalo}
+          precioGeneral={config.precio_regalo}
+          cobrador={nombreCobrador(defCobrador) ?? ""}
+          metodo={METODOS.find((m) => m.id === ultimoMetodo)?.txt ?? ""}
+          onCancel={() => setCobroRegalo(null)}
+          onCobrar={(c) => {
+            const p = cobroRegalo;
+            setCobroRegalo(null);
+            marcar(p, true, c);
+          }}
+        />
+      )}
 
       {modal === "about" && <AboutDialog onClose={() => setModal(null)} />}
 
@@ -1926,27 +1975,35 @@ function FilaNueva(props: {
   const [nombre, setNombre] = useState("");
   const [modalidad, setModalidad] = useState("comida");
   const [notas, setNotas] = useState("");
+  const [importe, setImporte] = useState("");
+  const [yaPagado, setYaPagado] = useState(false);
   const comida = modalidad !== "regalo";
+  const regalo = aCentimos(importe);
+  const importeMal = importe.trim() !== "" && regalo === null;
   const [ocupado, setOcupado] = useState(false);
 
-  const debe = props.precioRegalo + (comida ? props.precioComida : 0);
+  const debe = (regalo ?? props.precioRegalo) + (comida ? props.precioComida : 0);
   const duplicado =
     nombre.trim() !== "" &&
     props.nombres.some((n) => normalizar(n) === normalizar(nombre));
 
   const anadir = async () => {
-    if (!nombre.trim() || ocupado) return;
+    if (!nombre.trim() || ocupado || importeMal) return;
     setOcupado(true);
     const ok = await props.onAdd({
       nombre: nombre.trim(),
       comida,
       menu_id: modalidad.startsWith("m:") ? Number(modalidad.slice(2)) : null,
       notas,
+      importe_regalo: regalo === null || regalo === props.precioRegalo ? null : regalo,
+      pagado: yaPagado,
     });
     setOcupado(false);
     if (ok) {
       setNombre("");
       setNotas("");
+      setImporte("");
+      setYaPagado(false);
     }
     props.inputRef.current?.focus();
   };
@@ -1984,9 +2041,26 @@ function FilaNueva(props: {
           <option value="regalo">Solo regalo</option>
         </select>
       </td>
-      <td></td>
+      <td className="num c-regalo">
+        <input
+          className={"cell" + (importeMal ? " invalid" : "")}
+          inputMode="decimal"
+          placeholder={deCentimos(props.precioRegalo)}
+          aria-label="Importe del regalo de la nueva persona (vacío = el general)"
+          title="Importe del regalo (vacío = el general)"
+          value={importe}
+          onChange={(ev) => setImporte(ev.target.value)}
+          onFocus={(ev) => ev.target.select()}
+          onKeyDown={enter}
+        />
+      </td>
       <td className="num muted">{eur(debe)}</td>
-      <td></td>
+      <td>
+        <label className="yapagado" title="Registrar también el cobro, con el cobrador y método de la barra «Al cobrar»">
+          <input type="checkbox" checked={yaPagado} onChange={(ev) => setYaPagado(ev.target.checked)} />
+          Ya ha pagado
+        </label>
+      </td>
       <td className="c-notas">
         <input
           className="cell"
@@ -2000,12 +2074,60 @@ function FilaNueva(props: {
       <td className="rowact">
         <button
           className="btn small primary"
-          disabled={!nombre.trim() || ocupado}
+          disabled={!nombre.trim() || ocupado || importeMal}
           onClick={anadir}
         >
           Añadir
         </button>
       </td>
     </tr>
+  );
+}
+
+
+/** Cobro a una persona que solo aporta al regalo: permite ajustar el importe antes de cobrar. */
+function CobroRegaloDialog(props: {
+  persona: Participante;
+  precioGeneral: number;
+  cobrador: string;
+  metodo: string;
+  onCancel: () => void;
+  onCobrar: (importe: number) => void;
+}) {
+  const [txt, setTxt] = useState(deCentimos(props.persona.importe_regalo ?? props.precioGeneral));
+  const c = aCentimos(txt);
+  return (
+    <Dialogo
+      titulo={`Cobrar el regalo a ${props.persona.nombre}`}
+      onCancel={props.onCancel}
+      onSubmit={() => c !== null && props.onCobrar(c)}
+      ancho={420}
+    >
+      <label>
+        Importe del regalo
+        <div className={"money" + (c === null ? " invalid" : "")}>
+          <input
+            autoFocus
+            inputMode="decimal"
+            value={txt}
+            onChange={(ev) => setTxt(ev.target.value)}
+            onFocus={(ev) => ev.target.select()}
+          />
+          <span>€</span>
+        </div>
+      </label>
+      <p className="muted">
+        General: {eur(props.precioGeneral)}. Se cobra {props.metodo ? `en ${props.metodo.toLowerCase()}` : ""}
+        {props.cobrador ? ` por ${props.cobrador}` : ""}; se cambia en la barra «Al cobrar».
+      </p>
+      <div className="actions">
+        <button type="button" className="btn" onClick={props.onCancel}>
+          Cancelar
+        </button>
+        <button type="submit" className="btn primary" disabled={c === null}>
+          Cobrar {c !== null ? eur(c) : ""}
+        </button>
+      </div>
+    </Dialogo>
   );
 }

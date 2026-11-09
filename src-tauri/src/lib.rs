@@ -859,7 +859,7 @@ fn guardar_config(s: State<AppState>, config: Config) -> Res<()> {
 
 /// Alta de participante (con id = None). Por compatibilidad también actualiza la fila completa.
 #[tauri::command(async)]
-fn guardar_participante(s: State<AppState>, participante: Participante) -> Res<()> {
+fn guardar_participante(s: State<AppState>, participante: Participante) -> Res<i64> {
     let nombre = participante.nombre.trim().to_string();
     if nombre.is_empty() {
         return Err("El nombre es obligatorio".into());
@@ -894,6 +894,7 @@ fn guardar_participante(s: State<AppState>, participante: Participante) -> Res<(
             if n == 0 {
                 return Err(NO_EXISTE.into());
             }
+            Ok(id)
         }
         None => {
             db.execute(
@@ -907,9 +908,9 @@ fn guardar_participante(s: State<AppState>, participante: Participante) -> Res<(
                 ],
             )
             .map_err(e)?;
+            Ok(db.last_insert_rowid())
         }
     }
-    Ok(())
 }
 
 const NO_EXISTE: &str = "Esa persona ya no está en la lista (la ha eliminado otro equipo)";

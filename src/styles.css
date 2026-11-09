@@ -1628,3 +1628,6 @@ td select.tag-select { min-width: 178px; }
 body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 th { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 td.num, .num, .importe, .count { font-variant-numeric: tabular-nums; }
+
+.yapagado { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.yapagado input { margin: 0; }
