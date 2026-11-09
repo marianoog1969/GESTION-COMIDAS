@@ -24,6 +24,7 @@ import { ToastStack, useToasts } from "./components/Toasts";
 import BaseDatosDialog from "./components/BaseDatosDialog";
 import Dialogo from "./components/Dialogo";
 import Icono from "./components/Icono";
+import Logo from "./components/Logo";
 import CeldaTexto from "./components/CeldaTexto";
 import CeldaSelect from "./components/CeldaSelect";
 import GastosView from "./components/Gastos";
@@ -683,6 +684,8 @@ export default function App() {
     <div className={"app" + (sinConexion ? " offline" : "")}>
       <header className="topbar">
         <div className="titulo">
+          <Logo />
+          <div className="titulo-txt">
           <h1>{config.evento || "Comida de celebración"}</h1>
           <div className="meta">
             {config.fecha && <span><Icono n="calendar" /> {config.fecha}</span>}
@@ -693,6 +696,7 @@ export default function App() {
                 {eur(config.precio_regalo)} <span className="muted">por persona</span>
               </span>
             )}
+          </div>
           </div>
         </div>
         <div className="toolbar">
