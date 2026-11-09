@@ -122,11 +122,24 @@ export function informePdf(d: Datos): Uint8Array {
       ...estiloTabla,
       startY: titulo("Gastos del regalo"),
       head: [["Fecha", "Concepto", "Pagado por", "Importe"]],
-      body: [
-        ...d.gastos.map((g) => [fmtFecha(g.fecha), g.concepto, g.cobrador ?? "", eur(g.importe)]),
-        ["", "", "Total", eur(r.gastado)],
+      body: d.gastos.map((g) => [fmtFecha(g.fecha), g.concepto, g.cobrador ?? "", eur(g.importe)]),
+      foot: [
+        ["", "", "Total gastado", eur(r.gastado)],
+        ["", "", "Recaudado para el regalo", eur(r.cobrado_regalo)],
+        ["", "", r.disponible_regalo < 0 ? "Gastado de más" : "Disponible de momento", eur(Math.abs(r.disponible_regalo))],
       ],
+      showFoot: "lastPage",
+      footStyles: { fillColor: [239, 244, 255], textColor: [30, 41, 59], fontStyle: "bold" },
       columnStyles: { 3: num },
+      didParseCell: (h) => {
+        if (h.section === "foot") {
+          if (h.column.index === 2 || h.column.index === 3) h.cell.styles.halign = "right";
+          if (h.row.index === 2) {
+            h.cell.styles.textColor = r.disponible_regalo < 0 ? [185, 28, 28] : [21, 128, 61];
+            h.cell.styles.fontSize = 10;
+          }
+        }
+      },
     });
   }
 
