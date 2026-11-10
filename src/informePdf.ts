@@ -62,6 +62,36 @@ export function informePdf(d: Datos): Uint8Array {
     columnStyles: { 1: num, 2: num },
   });
 
+  // Quién va a la comida y quién solo aporta al regalo
+  {
+    const con = d.participantes.filter((p) => p.comida);
+    const solo = d.participantes.filter((p) => !p.comida);
+    const suma = (v: typeof con) => v.reduce((t, p) => t + p.debe, 0);
+    autoTable(doc, {
+      ...estiloTabla,
+      startY: titulo("Asistentes y aportaciones"),
+      head: [["Modalidad", "Personas", "Total"]],
+      body: [
+        ["Van a la comida (comida + regalo)", String(con.length), eur(suma(con))],
+        ["Solo aportan al regalo", String(solo.length), eur(suma(solo))],
+      ],
+      foot: [["Total", String(d.participantes.length), eur(suma(d.participantes))]],
+      showFoot: "lastPage",
+      footStyles: { fillColor: [239, 244, 255], textColor: [30, 41, 59], fontStyle: "bold" },
+      columnStyles: { 1: num, 2: num },
+      tableWidth: 120,
+    });
+    if (con.length > 0) {
+      autoTable(doc, {
+        ...estiloTabla,
+        startY: titulo(`Quién va a la comida (${con.length})`),
+        head: [["Nombre", "Menú"]],
+        body: con.map((p) => [p.nombre, p.menu ?? ""]),
+        tableWidth: 120,
+      });
+    }
+  }
+
   // Menús
   if (d.menus.length > 0) {
     const sin = d.participantes.filter((p) => p.comida && !p.menu_id).length;

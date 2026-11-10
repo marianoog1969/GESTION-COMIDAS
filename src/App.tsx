@@ -330,8 +330,15 @@ export default function App() {
       if (filtro === "pagados" && !p.pagado) return false;
       if (q && !normalizar(p.nombre + " " + p.notas).includes(q)) return false;
       if (filtroMenu !== "todos") {
-        if (filtroMenu === "regalo" ? p.comida : filtroMenu === "sin" ? !(p.comida && !p.menu_id) : `m:${p.menu_id}` !== filtroMenu)
-          return false;
+        const fuera =
+          filtroMenu === "comida"
+            ? !p.comida
+            : filtroMenu === "regalo"
+              ? p.comida
+              : filtroMenu === "sin"
+                ? !(p.comida && !p.menu_id)
+                : `m:${p.menu_id}` !== filtroMenu;
+        if (fuera) return false;
       }
       return true;
     });
@@ -867,9 +874,16 @@ export default function App() {
           </Card>
         )}
       </section>
-      {datos.menus.length > 0 && vista === "personas" && (
+      {(datos.menus.length > 0 || resumen.total_personas > 0) && vista === "personas" && (
         <div className="menubar" aria-label="Resumen por menú">
-          <span className="muted">Menús:</span>
+          <button
+            className={"mchip" + (filtroMenu === "comida" ? " on" : "")}
+            title="Ver quién va a la comida"
+            onClick={() => setFiltroMenu(filtroMenu === "comida" ? "todos" : "comida")}
+          >
+            <Icono n="menu" /> Van a la comida <b>{resumen.con_comida}</b>
+          </button>
+          {datos.menus.length > 0 && <span className="muted">Menús:</span>}
           {datos.menus.map((m) => (
             <button
               key={m.id}

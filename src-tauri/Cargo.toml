@@ -1,6 +1,6 @@
 [package]
 name = "celebracion"
-version = "0.10.2"
+version = "0.10.3"
 description = "Gestión de comida de celebración y regalo"
 authors = ["Mariano Ortuño"]
 license = "GPL-3.0-or-later"
