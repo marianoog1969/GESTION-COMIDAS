@@ -134,7 +134,7 @@ export default function GastosView(props: {
         </div>
       </section>
 
-      <div className="tablewrap">
+      <div className="tablewrap gastos-tabla">
         <table>
           <thead>
             <tr>
