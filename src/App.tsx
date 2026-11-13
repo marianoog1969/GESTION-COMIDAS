@@ -599,10 +599,11 @@ export default function App() {
 
   /** Valor del selector de modalidad: «regalo», «comida» (sin menú) o «m:ID». */
   const modalidadDe = (p: Participante) =>
-    p.homenajeado ? "hom" : !p.comida ? "regalo" : p.menu_id ? `m:${p.menu_id}` : "comida";
+    p.homenajeado ? (p.menu_id ? `h:${p.menu_id}` : "hom") : !p.comida ? "regalo" : p.menu_id ? `m:${p.menu_id}` : "comida";
 
   const cambiarModalidad = (p: Participante, v: string) => {
-    if (v === "hom") return guardarFila(p, { homenajeado: true });
+    if (v === "hom") return guardarFila(p, { homenajeado: true, menuId: 0 });
+    if (v.startsWith("h:")) return guardarFila(p, { homenajeado: true, menuId: Number(v.slice(2)) });
     const quitar = p.homenajeado ? { homenajeado: false } : {};
     if (v === "regalo") return guardarFila(p, { ...quitar, comida: false });
     if (v === "comida") return guardarFila(p, { ...quitar, comida: true, menuId: 0 });
@@ -1259,7 +1260,7 @@ export default function App() {
                   <select
                     className={
                       "inline tag-select " +
-                      (p.homenajeado ? "t-full" : !p.comida ? "t-gift" : datos.menus.length > 0 && !p.menu_id ? "missing" : "t-full")
+                      (!p.comida && !p.homenajeado ? "t-gift" : datos.menus.length > 0 && !p.menu_id ? "missing" : "t-full")
                     }
                     title={
                       p.comida && datos.menus.length > 0 && !p.menu_id
@@ -1281,7 +1282,12 @@ export default function App() {
                       </option>
                     ))}
                     <option value="regalo">Solo regalo</option>
-                    <option value="hom">Homenajeado (no paga)</option>
+                    <option value="hom">Homenajeado (no paga){datos.menus.length > 0 ? " · elegir menú" : ""}</option>
+                    {datos.menus.map((m) => (
+                      <option key={"h" + m.id} value={`h:${m.id}`}>
+                        Homenajeado · {m.nombre}
+                      </option>
+                    ))}
                   </select>
                 </td>
                 <td className="num c-regalo">
@@ -2031,7 +2037,7 @@ function FilaNueva(props: {
   const [notas, setNotas] = useState("");
   const [importe, setImporte] = useState("");
   const [yaPagado, setYaPagado] = useState(false);
-  const homenajeado = modalidad === "hom";
+  const homenajeado = modalidad === "hom" || modalidad.startsWith("h:");
   const comida = modalidad !== "regalo";
   const regalo = aCentimos(importe);
   const importeMal = importe.trim() !== "" && regalo === null;
@@ -2048,7 +2054,7 @@ function FilaNueva(props: {
     const ok = await props.onAdd({
       nombre: nombre.trim(),
       comida,
-      menu_id: modalidad.startsWith("m:") ? Number(modalidad.slice(2)) : null,
+      menu_id: /^[mh]:/.test(modalidad) ? Number(modalidad.slice(2)) : null,
       notas,
       importe_regalo: homenajeado || regalo === null || regalo === props.precioRegalo ? null : regalo,
       pagado: yaPagado && !homenajeado,
@@ -2095,7 +2101,12 @@ function FilaNueva(props: {
             </option>
           ))}
           <option value="regalo">Solo regalo</option>
-          <option value="hom">Homenajeado (no paga)</option>
+          <option value="hom">Homenajeado (no paga){props.menus.length > 0 ? " · elegir menú" : ""}</option>
+          {props.menus.map((m) => (
+            <option key={"h" + m.id} value={`h:${m.id}`}>
+              Homenajeado · {m.nombre}
+            </option>
+          ))}
         </select>
       </td>
       <td className="num c-regalo">
