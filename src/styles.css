@@ -1667,3 +1667,6 @@ label.check input { width: auto; margin: 0; }
   min-height: 0;
   overflow: visible;
 }
+
+.comida-resumen { margin-top: 10px; }
+.rr-valor.pendiente { color: var(--bad); }
