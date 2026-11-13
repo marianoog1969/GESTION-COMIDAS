@@ -1670,3 +1670,17 @@ label.check input { width: auto; margin: 0; }
 
 .comida-resumen { margin-top: 10px; }
 .rr-valor.pendiente { color: var(--bad); }
+
+.aportes .addrow input,
+.aportes .addrow select {
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--panel);
+  color: var(--text);
+  min-width: 0;
+}
+.aportes .addrow input:first-child { flex: 2 1 220px; }
+.aportes .addrow input:not(:first-child) { flex: 1 1 110px; }
+.aportes .addrow select { flex: 0 0 auto; cursor: pointer; }

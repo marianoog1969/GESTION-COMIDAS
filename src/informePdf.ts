@@ -70,6 +70,45 @@ export function informePdf(d: Datos): Uint8Array {
     columnStyles: { 1: num, 2: num },
   });
 
+  // Revisión de cobros: recogido ya y por recibir
+  {
+    const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)} %` : "-");
+    autoTable(doc, {
+      ...estiloTabla,
+      startY: titulo("Revisión de cobros: recogido y por recibir"),
+      head: [["", "Previsto", "Recogido ya", "Por recibir", "% recogido"]],
+      body: [
+        ["Comida", eur(r.total_comida), eur(r.cobrado_comida), eur(r.pendiente_comida), pct(r.cobrado_comida, r.total_comida)],
+        ["Regalo", eur(r.total_regalo), eur(r.cobrado_regalo), eur(r.pendiente_regalo), pct(r.cobrado_regalo, r.total_regalo)],
+      ],
+      foot: [["Total", eur(r.total_esperado), eur(r.cobrado), eur(r.pendiente), pct(r.cobrado, r.total_esperado)]],
+      showFoot: "lastPage",
+      footStyles: { fillColor: [239, 244, 255], textColor: [30, 41, 59], fontStyle: "bold" },
+      columnStyles: { 1: num, 2: num, 3: num, 4: num },
+      didParseCell: (h) => {
+        if (h.column.index > 0 && h.column.index < 5) h.cell.styles.halign = "right";
+        if (h.column.index === 3 && h.section !== "head" && r.pendiente > 0) h.cell.styles.textColor = [185, 28, 28];
+        if (h.column.index === 2 && h.section !== "head") h.cell.styles.textColor = [21, 128, 61];
+      },
+    });
+    const debe = d.participantes.filter((p) => !p.pagado && !p.homenajeado).sort((x, y) => y.debe - x.debe);
+    if (debe.length > 0) {
+      autoTable(doc, {
+        ...estiloTabla,
+        startY: titulo(`Por recibir de ${debe.length} ${debe.length === 1 ? "persona" : "personas"}`),
+        head: [["Nombre", "Modalidad", "Importe"]],
+        body: debe.map((p) => [p.nombre, p.comida ? "Comida + regalo" : "Solo regalo", eur(p.debe)]),
+        foot: [["", "Total por recibir", eur(r.pendiente)]],
+        showFoot: "lastPage",
+        footStyles: { fillColor: [254, 242, 242], textColor: [185, 28, 28], fontStyle: "bold" },
+        columnStyles: { 2: num },
+        didParseCell: (h) => {
+          if (h.section === "foot" && h.column.index > 0) h.cell.styles.halign = "right";
+        },
+      });
+    }
+  }
+
   // Desglose de la comida
   if (r.con_comida > 0) {
     autoTable(doc, {
@@ -198,6 +237,26 @@ export function informePdf(d: Datos): Uint8Array {
       columnStyles: { 3: num },
       didParseCell: (h) => {
         if (h.section === "foot" && (h.column.index === 2 || h.column.index === 3)) h.cell.styles.halign = "right";
+      },
+    });
+  }
+
+  // Gastos más caros
+  if (d.gastos.length >= 2) {
+    const top = [...d.gastos].sort((x, y) => y.importe - x.importe).slice(0, 5);
+    autoTable(doc, {
+      ...estiloTabla,
+      startY: titulo("Gastos más caros"),
+      head: [["#", "Concepto", "Importe", "% del gasto"]],
+      body: top.map((g, i) => [
+        String(i + 1),
+        g.concepto,
+        eur(g.importe),
+        r.gastado > 0 ? `${Math.round((g.importe / r.gastado) * 100)} %` : "-",
+      ]),
+      columnStyles: { 0: { cellWidth: 10 }, 2: num, 3: num },
+      didParseCell: (h) => {
+        if (h.column.index >= 2) h.cell.styles.halign = "right";
       },
     });
   }
