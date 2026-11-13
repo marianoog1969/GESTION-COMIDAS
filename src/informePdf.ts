@@ -70,28 +70,7 @@ export function informePdf(d: Datos): Uint8Array {
     columnStyles: { 1: num, 2: num },
   });
 
-  // Desglose del regalo y de la comida
-  autoTable(doc, {
-    ...estiloTabla,
-    startY: titulo("Fondo del regalo"),
-    head: [["Concepto", "Importe"]],
-    body: [
-      ["Recaudado para el regalo", eur(r.cobrado_regalo)],
-      ...(r.aportes_regalo > 0 ? [["+ Dinero extra (sobrante…)", eur(r.aportes_regalo)]] : []),
-      ["- Gastado", eur(r.gastado)],
-      ...(r.homenajeados > 0
-        ? [[`- Comida de homenajeados (${r.homenajeados})${r.comida_cubierta > 0 ? " tras dinero extra" : ""}`, eur(r.comida_homenajeados - r.comida_cubierta)]]
-        : []),
-    ],
-    foot: [[r.disponible_regalo < 0 ? "Gastado de más" : "Disponible", eur(Math.abs(r.disponible_regalo))]],
-    showFoot: "lastPage",
-    footStyles: { fillColor: [239, 244, 255], textColor: r.disponible_regalo < 0 ? [185, 28, 28] : [21, 128, 61], fontStyle: "bold" },
-    columnStyles: { 1: num },
-    tableWidth: 120,
-    didParseCell: (h) => {
-      if (h.section === "foot" && h.column.index === 1) h.cell.styles.halign = "right";
-    },
-  });
+  // Desglose de la comida
   if (r.con_comida > 0) {
     autoTable(doc, {
       ...estiloTabla,
@@ -213,29 +192,38 @@ export function informePdf(d: Datos): Uint8Array {
       startY: titulo("Gastos del regalo"),
       head: [["Fecha", "Concepto", "Pagado por", "Importe"]],
       body: d.gastos.map((g) => [fmtFecha(g.fecha), g.concepto, g.cobrador ?? "", eur(g.importe)]),
-      foot: [
-        ["", "", "Total gastado", eur(r.gastado)],
-        ["", "", "Recaudado para el regalo", eur(r.cobrado_regalo)],
-        ...(r.aportes_regalo > 0 ? [["", "", "Dinero extra añadido", eur(r.aportes_regalo)]] : []),
-        ...(r.homenajeados > 0
-          ? [["", "", `Comida de ${r.homenajeados} homenajeado${r.homenajeados === 1 ? "" : "s"}${r.comida_cubierta > 0 ? " (tras dinero extra)" : ""}`, eur(r.comida_homenajeados - r.comida_cubierta)]]
-          : []),
-        ["", "", r.disponible_regalo < 0 ? "Gastado de más" : "Disponible de momento", eur(Math.abs(r.disponible_regalo))],
-      ],
+      foot: [["", "", "Total gastado", eur(r.gastado)]],
       showFoot: "lastPage",
       footStyles: { fillColor: [239, 244, 255], textColor: [30, 41, 59], fontStyle: "bold" },
       columnStyles: { 3: num },
       didParseCell: (h) => {
-        if (h.section === "foot") {
-          if (h.column.index === 2 || h.column.index === 3) h.cell.styles.halign = "right";
-          if (h.row.index === h.table.foot.length - 1) {
-            h.cell.styles.textColor = r.disponible_regalo < 0 ? [185, 28, 28] : [21, 128, 61];
-            h.cell.styles.fontSize = 10;
-          }
-        }
+        if (h.section === "foot" && (h.column.index === 2 || h.column.index === 3)) h.cell.styles.halign = "right";
       },
     });
   }
+
+  // Resumen del regalo (aparte de la lista de gastos)
+  autoTable(doc, {
+    ...estiloTabla,
+    startY: titulo("Resumen del regalo"),
+    head: [["Concepto", "Importe"]],
+    body: [
+      ["Total recaudado", eur(r.cobrado_regalo)],
+      ...(r.aportes_regalo > 0 ? [["+ Dinero extra añadido (sobrante)", eur(r.aportes_regalo)]] : []),
+      ["- Total gastado", eur(r.gastado)],
+      ...(r.homenajeados > 0
+        ? [[`- Comida de homenajeados (${r.homenajeados})${r.comida_cubierta > 0 ? ", tras dinero extra de la comida" : ""}`, eur(r.comida_homenajeados - r.comida_cubierta)]]
+        : []),
+    ],
+    foot: [[r.disponible_regalo < 0 ? "= Gastado de más" : "= Disponible para el regalo", eur(Math.abs(r.disponible_regalo))]],
+    showFoot: "lastPage",
+    footStyles: { fillColor: [239, 244, 255], textColor: r.disponible_regalo < 0 ? [185, 28, 28] : [21, 128, 61], fontStyle: "bold" },
+    columnStyles: { 1: num },
+    tableWidth: 120,
+    didParseCell: (h) => {
+      if (h.section === "foot" && h.column.index === 1) h.cell.styles.halign = "right";
+    },
+  });
 
   if (d.traspasos.length > 0) {
     autoTable(doc, {
