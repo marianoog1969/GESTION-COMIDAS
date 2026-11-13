@@ -128,6 +128,11 @@ export default function GastosView(props: {
               ? `Para: ${props.config.regalo_desc}`
               : "Queda para el regalo"}
           </div>
+          {r.pendiente_regalo > 0 && (
+            <div className="card-sub" title="Lo disponible más lo que aún falta por cobrar para el regalo">
+              Previsto si pagan todos: <b>{eur(r.disponible_regalo + r.pendiente_regalo)}</b>
+            </div>
+          )}
         </div>
         <div className="rr-barra" aria-label={`${pctGastado}% del dinero del regalo gastado`}>
           <div className="bar" style={{ width: pctGastado + "%" }} />

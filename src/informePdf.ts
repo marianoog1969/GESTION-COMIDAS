@@ -215,13 +215,22 @@ export function informePdf(d: Datos): Uint8Array {
         ? [[`- Comida de homenajeados (${r.homenajeados})${r.comida_cubierta > 0 ? ", tras dinero extra de la comida" : ""}`, eur(r.comida_homenajeados - r.comida_cubierta)]]
         : []),
     ],
-    foot: [[r.disponible_regalo < 0 ? "= Gastado de más" : "= Disponible para el regalo", eur(Math.abs(r.disponible_regalo))]],
+    foot: [
+      [r.disponible_regalo < 0 ? "= Gastado de más" : "= Disponible para el regalo", eur(Math.abs(r.disponible_regalo))],
+      ...(r.pendiente_regalo > 0
+        ? [[`Previsto si pagan todos (faltan ${eur(r.pendiente_regalo)} por cobrar)`, eur(r.disponible_regalo + r.pendiente_regalo)]]
+        : []),
+    ],
     showFoot: "lastPage",
     footStyles: { fillColor: [239, 244, 255], textColor: r.disponible_regalo < 0 ? [185, 28, 28] : [21, 128, 61], fontStyle: "bold" },
     columnStyles: { 1: num },
     tableWidth: 120,
     didParseCell: (h) => {
       if (h.section === "foot" && h.column.index === 1) h.cell.styles.halign = "right";
+      if (h.section === "foot" && h.row.index === 1) {
+        h.cell.styles.fontStyle = "normal";
+        h.cell.styles.textColor = [71, 85, 105];
+      }
     },
   });
 
