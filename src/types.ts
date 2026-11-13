@@ -69,6 +69,8 @@ export interface Traspaso {
 }
 
 export interface Resumen {
+  comida_cubierta: number;
+  sobrante_comida: number;
   aportes_regalo: number;
   aportes_comida: number;
   homenajeados: number;

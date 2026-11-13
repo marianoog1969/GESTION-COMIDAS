@@ -215,6 +215,10 @@ struct Resumen {
     /// Dinero extra (p. ej. sobrante de otros años) añadido al regalo o a la comida
     aportes_regalo: i64,
     aportes_comida: i64,
+    /// Parte de la comida de los homenajeados cubierta con ese dinero de la comida
+    comida_cubierta: i64,
+    /// Dinero de la comida que sobra tras cubrir a los homenajeados
+    sobrante_comida: i64,
     /// Gastos del regalo
     gastos: i64,
     gastado: i64,
@@ -510,7 +514,9 @@ fn leer_aportes(c: &Connection) -> Res<Vec<Aporte>> {
 fn aplicar_aportes(r: &mut Resumen, ap: &[Aporte]) {
     r.aportes_regalo = ap.iter().filter(|a| a.destino == "regalo").map(|a| a.importe).sum();
     r.aportes_comida = ap.iter().filter(|a| a.destino == "comida").map(|a| a.importe).sum();
-    r.disponible_regalo += r.aportes_regalo;
+    r.comida_cubierta = r.aportes_comida.min(r.comida_homenajeados);
+    r.sobrante_comida = r.aportes_comida - r.comida_cubierta;
+    r.disponible_regalo += r.aportes_regalo + r.comida_cubierta;
 }
 
 #[tauri::command(async)]
@@ -2618,7 +2624,8 @@ mod tests {
             Aporte { id: None, concepto: "Sobrante 2025".into(), importe: 700, fecha: "2026-01-01".into(), destino: "comida".into() },
         ];
         aplicar_aportes(&mut r, &ap);
-        assert_eq!((r.aportes_regalo, r.aportes_comida, r.disponible_regalo), (5000, 700, 2000));
+        assert_eq!((r.aportes_regalo, r.aportes_comida, r.disponible_regalo), (5000, 700, 2700));
+        assert_eq!((r.comida_cubierta, r.sobrante_comida), (700, 0));
     }
 
     #[test]

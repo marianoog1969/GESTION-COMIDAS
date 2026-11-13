@@ -55,7 +55,10 @@ export function informePdf(d: Datos): Uint8Array {
       ["Falta por cobrar", eur(r.pendiente), String(r.pendientes)],
       ["Recaudado para el regalo", eur(r.cobrado_regalo), ""],
       ...(r.aportes_regalo > 0 ? [["Dinero extra añadido al regalo", eur(r.aportes_regalo), ""]] : []),
-      ...(r.aportes_comida > 0 ? [["Dinero extra apartado para la comida", eur(r.aportes_comida), ""]] : []),
+      ...(r.aportes_comida > 0
+        ? [["Dinero extra para la comida (cubre a homenajeados)", eur(r.aportes_comida), ""]]
+        : []),
+      ...(r.sobrante_comida > 0 ? [["Sobrante de la comida", eur(r.sobrante_comida), ""]] : []),
       ["Gastado en el regalo", eur(r.gastado), String(r.gastos)],
       ...(r.homenajeados > 0
         ? [["Comida de homenajeados (a cargo del regalo)", eur(r.comida_homenajeados), String(r.homenajeados)]]
@@ -163,7 +166,7 @@ export function informePdf(d: Datos): Uint8Array {
         ["", "", "Recaudado para el regalo", eur(r.cobrado_regalo)],
         ...(r.aportes_regalo > 0 ? [["", "", "Dinero extra añadido", eur(r.aportes_regalo)]] : []),
         ...(r.homenajeados > 0
-          ? [["", "", `Comida de ${r.homenajeados} homenajeado${r.homenajeados === 1 ? "" : "s"}`, eur(r.comida_homenajeados)]]
+          ? [["", "", `Comida de ${r.homenajeados} homenajeado${r.homenajeados === 1 ? "" : "s"}${r.comida_cubierta > 0 ? " (tras dinero extra)" : ""}`, eur(r.comida_homenajeados - r.comida_cubierta)]]
           : []),
         ["", "", r.disponible_regalo < 0 ? "Gastado de más" : "Disponible de momento", eur(Math.abs(r.disponible_regalo))],
       ],

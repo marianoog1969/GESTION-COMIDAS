@@ -140,4 +140,4 @@ Hasta la v0.3 los datos se guardaban en cada equipo (`%APPDATA%\<identificador>\
 ## Homenajeados y dinero extra
 
 - **Homenajeado (no paga)**: se elige en la columna Modalidad. Va a la comida, no debe nada y no cuenta como pendiente. El coste de su comida (nº × precio de la comida) se descuenta del fondo del regalo. Puede haber varios.
-- **Dinero extra** (pestaña Gastos del regalo): sobrante de otros años u otras aportaciones. Con destino «Al regalo» se suma al fondo; con «A la comida» queda apuntado aparte.
+- **Dinero extra** (pestaña Gastos del regalo): sobrante de otros años u otras aportaciones. Con destino «Al regalo» se suma al fondo; con «A la comida» cubre primero la comida de los homenajeados; lo que sobre queda como sobrante de la comida.

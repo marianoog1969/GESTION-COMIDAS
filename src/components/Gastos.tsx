@@ -109,9 +109,10 @@ export default function GastosView(props: {
             <div className="rr-op">−</div>
             <div className="rr-item">
               <div className="card-title">Comida de homenajeados</div>
-              <div className="rr-valor">{eur(r.comida_homenajeados)}</div>
+              <div className="rr-valor">{eur(r.comida_homenajeados - r.comida_cubierta)}</div>
               <div className="card-sub">
                 {r.homenajeados} {r.homenajeados === 1 ? "persona" : "personas"} · no pagan
+                {r.comida_cubierta > 0 && <> · {eur(r.comida_cubierta)} cubiertos con el dinero extra de la comida</>}
               </div>
             </div>
           </>
@@ -243,6 +244,9 @@ export default function GastosView(props: {
         </table>
       </div>
 
+      {r.sobrante_comida > 0 && (
+        <p className="muted small">Sobrante apartado para la comida: {eur(r.sobrante_comida)}</p>
+      )}
       <AportesSeccion aportes={props.aportes} ejecutar={props.ejecutar} />
     </>
   );

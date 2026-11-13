@@ -34,7 +34,8 @@ export function informeCsv(d: Datos): string {
   L.push(fila("Falta por cobrar", num(r.pendiente), r.pendientes));
   L.push(fila("Recaudado para el regalo", num(r.cobrado_regalo), ""));
   if (r.aportes_regalo > 0) L.push(fila("Dinero extra añadido al regalo", num(r.aportes_regalo), ""));
-  if (r.aportes_comida > 0) L.push(fila("Dinero extra apartado para la comida", num(r.aportes_comida), ""));
+  if (r.aportes_comida > 0) L.push(fila("Dinero extra para la comida (cubre a homenajeados)", num(r.aportes_comida), ""));
+  if (r.sobrante_comida > 0) L.push(fila("Sobrante de la comida", num(r.sobrante_comida), ""));
   L.push(fila("Gastado en el regalo", num(r.gastado), r.gastos));
   if (r.homenajeados > 0) L.push(fila("Comida de homenajeados (a cargo del regalo)", num(r.comida_homenajeados), r.homenajeados));
   L.push(fila("Disponible para el regalo", num(r.disponible_regalo), ""));
