@@ -54,7 +54,12 @@ export function informePdf(d: Datos): Uint8Array {
       ["Cobrado", eur(r.cobrado), String(r.pagados)],
       ["Falta por cobrar", eur(r.pendiente), String(r.pendientes)],
       ["Recaudado para el regalo", eur(r.cobrado_regalo), ""],
+      ...(r.aportes_regalo > 0 ? [["Dinero extra añadido al regalo", eur(r.aportes_regalo), ""]] : []),
+      ...(r.aportes_comida > 0 ? [["Dinero extra apartado para la comida", eur(r.aportes_comida), ""]] : []),
       ["Gastado en el regalo", eur(r.gastado), String(r.gastos)],
+      ...(r.homenajeados > 0
+        ? [["Comida de homenajeados (a cargo del regalo)", eur(r.comida_homenajeados), String(r.homenajeados)]]
+        : []),
       ["Disponible para el regalo", eur(r.disponible_regalo), ""],
       ["Cobrado en efectivo", eur(r.cobrado_efectivo), ""],
       ["Cobrado por Bizum", eur(r.cobrado_bizum), ""],
@@ -130,10 +135,10 @@ export function informePdf(d: Datos): Uint8Array {
     head: [["Nombre", "Modalidad", "Regalo", "Importe", "Estado", "Fecha", "Cobrado por", "Método"]],
     body: d.participantes.map((p) => [
       p.nombre,
-      p.comida ? (p.menu ? `${p.menu} + regalo` : "Comida + regalo") : "Solo regalo",
-      eur(p.importe_regalo ?? c.precio_regalo),
+      p.homenajeado ? (p.menu ? `${p.menu} (homenajeado)` : "Homenajeado") : p.comida ? (p.menu ? `${p.menu} + regalo` : "Comida + regalo") : "Solo regalo",
+      p.homenajeado ? "" : eur(p.importe_regalo ?? c.precio_regalo),
       eur(p.debe),
-      p.pagado ? "Pagado" : "Pendiente",
+      p.homenajeado ? "Homenaje" : p.pagado ? "Pagado" : "Pendiente",
       fmtFecha(p.fecha_pago),
       p.cobrador ?? "",
       p.metodo ? METODO[p.metodo] ?? p.metodo : "",
@@ -156,6 +161,10 @@ export function informePdf(d: Datos): Uint8Array {
       foot: [
         ["", "", "Total gastado", eur(r.gastado)],
         ["", "", "Recaudado para el regalo", eur(r.cobrado_regalo)],
+        ...(r.aportes_regalo > 0 ? [["", "", "Dinero extra añadido", eur(r.aportes_regalo)]] : []),
+        ...(r.homenajeados > 0
+          ? [["", "", `Comida de ${r.homenajeados} homenajeado${r.homenajeados === 1 ? "" : "s"}`, eur(r.comida_homenajeados)]]
+          : []),
         ["", "", r.disponible_regalo < 0 ? "Gastado de más" : "Disponible de momento", eur(Math.abs(r.disponible_regalo))],
       ],
       showFoot: "lastPage",
@@ -164,7 +173,7 @@ export function informePdf(d: Datos): Uint8Array {
       didParseCell: (h) => {
         if (h.section === "foot") {
           if (h.column.index === 2 || h.column.index === 3) h.cell.styles.halign = "right";
-          if (h.row.index === 2) {
+          if (h.row.index === h.table.foot.length - 1) {
             h.cell.styles.textColor = r.disponible_regalo < 0 ? [185, 28, 28] : [21, 128, 61];
             h.cell.styles.fontSize = 10;
           }

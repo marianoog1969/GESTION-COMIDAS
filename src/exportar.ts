@@ -33,7 +33,10 @@ export function informeCsv(d: Datos): string {
   L.push(fila("Cobrado", num(r.cobrado), r.pagados));
   L.push(fila("Falta por cobrar", num(r.pendiente), r.pendientes));
   L.push(fila("Recaudado para el regalo", num(r.cobrado_regalo), ""));
+  if (r.aportes_regalo > 0) L.push(fila("Dinero extra añadido al regalo", num(r.aportes_regalo), ""));
+  if (r.aportes_comida > 0) L.push(fila("Dinero extra apartado para la comida", num(r.aportes_comida), ""));
   L.push(fila("Gastado en el regalo", num(r.gastado), r.gastos));
+  if (r.homenajeados > 0) L.push(fila("Comida de homenajeados (a cargo del regalo)", num(r.comida_homenajeados), r.homenajeados));
   L.push(fila("Disponible para el regalo", num(r.disponible_regalo), ""));
   L.push(fila("Cobrado en efectivo", num(r.cobrado_efectivo), ""));
   L.push(fila("Cobrado por Bizum", num(r.cobrado_bizum), ""));
@@ -46,11 +49,11 @@ export function informeCsv(d: Datos): string {
     L.push(
       fila(
         p.nombre,
-        p.comida ? "Comida + regalo" : "Solo regalo",
+        p.homenajeado ? "Homenajeado" : p.comida ? "Comida + regalo" : "Solo regalo",
         p.menu ?? "",
         num(p.importe_regalo ?? d.config.precio_regalo),
         num(p.debe),
-        p.pagado ? "Pagado" : "Pendiente",
+        p.homenajeado ? "Homenaje" : p.pagado ? "Pagado" : "Pendiente",
         fmtFecha(p.fecha_pago),
         p.cobrador ?? "",
         p.metodo ? METODO[p.metodo] ?? p.metodo : "",
@@ -121,7 +124,7 @@ export function nombreArchivo(d: Datos): string {
 
 /** Lista de quien falta por pagar, lista para pegar en WhatsApp o en un correo. */
 export function textoPendientes(d: Datos): string {
-  const pendientes = d.participantes.filter((p) => !p.pagado);
+  const pendientes = d.participantes.filter((p) => !p.pagado && !p.homenajeado);
   const L = [`${d.config.evento || "Celebración"}${d.config.fecha ? ` (${d.config.fecha})` : ""}`];
   L.push(
     pendientes.length === 1

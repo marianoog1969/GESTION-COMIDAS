@@ -20,6 +20,8 @@ export interface Participante {
   metodo: string | null; // "efectivo" | "bizum"
   menu_id: number | null;
   menu: string | null;
+  /** No paga; va a la comida y su comida sale del fondo del regalo */
+  homenajeado: boolean;
 }
 
 export interface Menu {
@@ -67,6 +69,11 @@ export interface Traspaso {
 }
 
 export interface Resumen {
+  aportes_regalo: number;
+  aportes_comida: number;
+  homenajeados: number;
+  /** Coste de la comida de los homenajeados (céntimos), a cargo del fondo del regalo */
+  comida_homenajeados: number;
   total_personas: number;
   con_comida: number;
   solo_regalo: number;
@@ -99,6 +106,15 @@ export interface Datos {
   gastos: Gasto[];
   traspasos: Traspaso[];
   menus: Menu[];
+  aportes: Aporte[];
+}
+
+export interface Aporte {
+  id: number | null;
+  concepto: string;
+  importe: number; // céntimos
+  fecha: string;
+  destino: "regalo" | "comida";
 }
 
 export interface Estado {

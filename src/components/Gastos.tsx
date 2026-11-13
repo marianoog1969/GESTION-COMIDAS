@@ -2,6 +2,7 @@ import Icono from "./Icono";
 import { RefObject, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
+  Aporte,
   Cobrador,
   Config,
   Gasto,
@@ -26,6 +27,7 @@ export const importeValido = (t: string) => (aCentimos(t) ?? 0) > 0;
 /** Vista de los gastos del regalo: resumen, alta rápida y lista editable. */
 export default function GastosView(props: {
   gastos: Gasto[];
+  aportes: Aporte[];
   resumen: Resumen;
   config: Config;
   cobradores: Cobrador[];
@@ -84,6 +86,16 @@ export default function GastosView(props: {
             {r.pendiente_regalo > 0 && <> · faltan {eur(r.pendiente_regalo)}</>}
           </div>
         </div>
+        {r.aportes_regalo > 0 && (
+          <>
+            <div className="rr-op">+</div>
+            <div className="rr-item">
+              <div className="card-title">Aportado (sobrante…)</div>
+              <div className="rr-valor">{eur(r.aportes_regalo)}</div>
+              <div className="card-sub">Dinero extra añadido al regalo</div>
+            </div>
+          </>
+        )}
         <div className="rr-op">−</div>
         <div className="rr-item">
           <div className="card-title">Gastado</div>
@@ -92,6 +104,18 @@ export default function GastosView(props: {
             {r.gastos} {r.gastos === 1 ? "gasto" : "gastos"}
           </div>
         </div>
+        {r.comida_homenajeados > 0 && (
+          <>
+            <div className="rr-op">−</div>
+            <div className="rr-item">
+              <div className="card-title">Comida de homenajeados</div>
+              <div className="rr-valor">{eur(r.comida_homenajeados)}</div>
+              <div className="card-sub">
+                {r.homenajeados} {r.homenajeados === 1 ? "persona" : "personas"} · no pagan
+              </div>
+            </div>
+          </>
+        )}
         <div className="rr-op">=</div>
         <div className={"rr-item destacado " + (excedido ? "bad" : "good")}>
           <div className="card-title">{excedido ? "Gastado de más" : "Disponible"}</div>
@@ -218,7 +242,89 @@ export default function GastosView(props: {
           )}
         </table>
       </div>
+
+      <AportesSeccion aportes={props.aportes} ejecutar={props.ejecutar} />
     </>
+  );
+}
+
+/** Dinero extra (p. ej. sobrante de otros años) que se añade al fondo del regalo o a la comida. */
+function AportesSeccion(props: { aportes: Aporte[]; ejecutar: Ejecutar }) {
+  const [concepto, setConcepto] = useState("");
+  const [importe, setImporte] = useState("");
+  const [destino, setDestino] = useState<"regalo" | "comida">("regalo");
+  const [fecha, setFecha] = useState(hoy());
+  const cents = aCentimos(importe);
+  const listo = concepto.trim() !== "" && cents !== null && cents > 0;
+
+  const anadir = async () => {
+    if (!listo || cents === null) return;
+    const ok = await props.ejecutar(
+      () => invoke("guardar_aporte", { aporte: { id: null, concepto, importe: cents, fecha, destino } }),
+      { texto: `Aportación de ${eur(cents)} añadida al ${destino === "regalo" ? "regalo" : "fondo de la comida"}` }
+    );
+    if (ok) {
+      setConcepto("");
+      setImporte("");
+    }
+  };
+
+  return (
+    <section className="aportes">
+      <h3 className="sub">Dinero extra (sobrante de otros años…)</h3>
+      <p className="muted small">
+        Se suma al fondo del regalo o se aparta para la comida. No lo paga ningún participante.
+      </p>
+      <div className="addrow">
+        <input
+          placeholder="Concepto (p. ej. Sobrante de 2025)"
+          aria-label="Concepto de la aportación"
+          value={concepto}
+          onChange={(ev) => setConcepto(ev.target.value)}
+          onKeyDown={(ev) => ev.key === "Enter" && anadir()}
+        />
+        <input
+          inputMode="decimal"
+          placeholder="Importe"
+          aria-label="Importe de la aportación"
+          value={importe}
+          onChange={(ev) => setImporte(ev.target.value)}
+          onKeyDown={(ev) => ev.key === "Enter" && anadir()}
+        />
+        <select aria-label="Destino" value={destino} onChange={(ev) => setDestino(ev.target.value as "regalo" | "comida")}>
+          <option value="regalo">Al regalo</option>
+          <option value="comida">A la comida</option>
+        </select>
+        <input type="date" aria-label="Fecha" value={fecha} max={hoy()} onChange={(ev) => ev.target.value && setFecha(ev.target.value)} />
+        <button className="btn primary" disabled={!listo} onClick={anadir}>
+          Añadir
+        </button>
+      </div>
+      {props.aportes.length > 0 && (
+        <ul className="aportes-lista">
+          {props.aportes.map((a) => (
+            <li key={a.id}>
+              <span>
+                {fmtFecha(a.fecha)} · {a.concepto} · <b>{a.destino === "regalo" ? "Regalo" : "Comida"}</b>
+              </span>
+              <b>{eur(a.importe)}</b>
+              <button
+                className="icon-btn danger"
+                title="Eliminar esta aportación"
+                aria-label={`Eliminar la aportación ${a.concepto}`}
+                onClick={() =>
+                  props.ejecutar(() => invoke("eliminar_aporte", { id: a.id }), {
+                    texto: `Aportación «${a.concepto}» eliminada`,
+                  })
+                }
+              >
+                <Icono n="trash" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

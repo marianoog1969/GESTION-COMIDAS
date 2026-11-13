@@ -326,7 +326,7 @@ export default function App() {
     if (!datos) return [];
     const q = normalizar(busqueda);
     const filtrados = datos.participantes.filter((p) => {
-      if (filtro === "pendientes" && p.pagado) return false;
+      if (filtro === "pendientes" && (p.pagado || p.homenajeado)) return false;
       if (filtro === "pagados" && !p.pagado) return false;
       if (q && !normalizar(p.nombre + " " + p.notas).includes(q)) return false;
       if (filtroMenu !== "todos") {
@@ -438,7 +438,7 @@ export default function App() {
 
   // Si la búsqueda deja una sola persona y está pendiente, Enter la cobra
   const unicoPendiente =
-    vista === "personas" && busqueda.trim() !== "" && lista.length === 1 && !lista[0].pagado
+    vista === "personas" && busqueda.trim() !== "" && lista.length === 1 && !lista[0].pagado && !lista[0].homenajeado
       ? lista[0]
       : null;
 
@@ -580,6 +580,7 @@ export default function App() {
       notas?: string;
       menuId?: number; // 0 = sin menú
       importeRegalo?: number; // céntimos; -1 = regalo general
+      homenajeado?: boolean;
     }
   ) => {
     resaltar("p" + p.id);
@@ -591,18 +592,21 @@ export default function App() {
         notas: cambios.notas ?? null,
         menuId: cambios.menuId ?? null,
         importeRegalo: cambios.importeRegalo ?? null,
+        homenajeado: cambios.homenajeado ?? null,
       })
     );
   };
 
   /** Valor del selector de modalidad: «regalo», «comida» (sin menú) o «m:ID». */
   const modalidadDe = (p: Participante) =>
-    !p.comida ? "regalo" : p.menu_id ? `m:${p.menu_id}` : "comida";
+    p.homenajeado ? "hom" : !p.comida ? "regalo" : p.menu_id ? `m:${p.menu_id}` : "comida";
 
   const cambiarModalidad = (p: Participante, v: string) => {
-    if (v === "regalo") return guardarFila(p, { comida: false });
-    if (v === "comida") return guardarFila(p, { comida: true, menuId: 0 });
-    return guardarFila(p, { comida: true, menuId: Number(v.slice(2)) });
+    if (v === "hom") return guardarFila(p, { homenajeado: true });
+    const quitar = p.homenajeado ? { homenajeado: false } : {};
+    if (v === "regalo") return guardarFila(p, { ...quitar, comida: false });
+    if (v === "comida") return guardarFila(p, { ...quitar, comida: true, menuId: 0 });
+    return guardarFila(p, { ...quitar, comida: true, menuId: Number(v.slice(2)) });
   };
 
   const anadir = (p: Partial<Participante>) =>
@@ -622,6 +626,7 @@ export default function App() {
             metodo: null,
             menu_id: null,
             menu: null,
+            homenajeado: false,
             ...p,
             pagado: false,
           },
@@ -841,6 +846,7 @@ export default function App() {
           onClick={() => setFiltro("todos")}
         >
           {resumen.con_comida} con comida · {resumen.solo_regalo} solo regalo
+          {resumen.homenajeados > 0 && <> · {resumen.homenajeados} homenajeado{resumen.homenajeados === 1 ? "" : "s"}</>}
         </Card>
         <Card titulo="Total previsto" valor={eur(resumen.total_esperado)}>
           Comida {eur(resumen.total_comida)} · Regalo {eur(resumen.total_regalo)}
@@ -1134,6 +1140,7 @@ export default function App() {
       {vista === "gastos" ? (
         <GastosView
           gastos={datos.gastos}
+          aportes={datos.aportes}
           resumen={resumen}
           config={config}
           cobradores={reales}
@@ -1212,12 +1219,16 @@ export default function App() {
               <tr
                 key={p.id ?? p.nombre}
                 className={
-                  (p.pagado ? "paid" : "unpaid") +
+                  (p.homenajeado ? "paid honor" : p.pagado ? "paid" : "unpaid") +
                   (resaltados.has("p" + p.id) ? " flash" : "")
                 }
               >
                 <td className="c-estado">
-                  {p.pagado ? (
+                  {p.homenajeado ? (
+                    <span className="status paid" title="Homenajeado/a: no paga">
+                      <Icono n="gift" /> Homenaje
+                    </span>
+                  ) : p.pagado ? (
                     <button
                       className="status paid"
                       title="Pagado · pulsa para marcar como pendiente"
@@ -1248,7 +1259,7 @@ export default function App() {
                   <select
                     className={
                       "inline tag-select " +
-                      (!p.comida ? "t-gift" : datos.menus.length > 0 && !p.menu_id ? "missing" : "t-full")
+                      (p.homenajeado ? "t-full" : !p.comida ? "t-gift" : datos.menus.length > 0 && !p.menu_id ? "missing" : "t-full")
                     }
                     title={
                       p.comida && datos.menus.length > 0 && !p.menu_id
@@ -1270,10 +1281,11 @@ export default function App() {
                       </option>
                     ))}
                     <option value="regalo">Solo regalo</option>
+                    <option value="hom">Homenajeado (no paga)</option>
                   </select>
                 </td>
                 <td className="num c-regalo">
-                  <CeldaTexto
+                  {p.homenajeado ? <span className="muted">—</span> : <CeldaTexto
                     valor={deCentimos(p.importe_regalo ?? config.precio_regalo)}
                     inputMode="decimal"
                     etiqueta="Regalo de esta persona"
@@ -1286,9 +1298,9 @@ export default function App() {
                         importeRegalo: c === config.precio_regalo ? -1 : c,
                       });
                     }}
-                  />
+                  />}
                 </td>
-                <td className="num importe">{eur(p.debe)}</td>
+                <td className="num importe">{p.homenajeado ? <span className="muted">—</span> : eur(p.debe)}</td>
                 <td className="c-cobro">
                   {p.pagado ? (
                     <div className="cobro">
@@ -2019,12 +2031,13 @@ function FilaNueva(props: {
   const [notas, setNotas] = useState("");
   const [importe, setImporte] = useState("");
   const [yaPagado, setYaPagado] = useState(false);
+  const homenajeado = modalidad === "hom";
   const comida = modalidad !== "regalo";
   const regalo = aCentimos(importe);
   const importeMal = importe.trim() !== "" && regalo === null;
   const [ocupado, setOcupado] = useState(false);
 
-  const debe = (regalo ?? props.precioRegalo) + (comida ? props.precioComida : 0);
+  const debe = homenajeado ? 0 : (regalo ?? props.precioRegalo) + (comida ? props.precioComida : 0);
   const duplicado =
     nombre.trim() !== "" &&
     props.nombres.some((n) => normalizar(n) === normalizar(nombre));
@@ -2037,8 +2050,9 @@ function FilaNueva(props: {
       comida,
       menu_id: modalidad.startsWith("m:") ? Number(modalidad.slice(2)) : null,
       notas,
-      importe_regalo: regalo === null || regalo === props.precioRegalo ? null : regalo,
-      pagado: yaPagado,
+      importe_regalo: homenajeado || regalo === null || regalo === props.precioRegalo ? null : regalo,
+      pagado: yaPagado && !homenajeado,
+      homenajeado,
     });
     setOcupado(false);
     if (ok) {
@@ -2081,10 +2095,12 @@ function FilaNueva(props: {
             </option>
           ))}
           <option value="regalo">Solo regalo</option>
+          <option value="hom">Homenajeado (no paga)</option>
         </select>
       </td>
       <td className="num c-regalo">
         <input
+          disabled={homenajeado}
           className={"cell" + (importeMal ? " invalid" : "")}
           inputMode="decimal"
           placeholder={deCentimos(props.precioRegalo)}
@@ -2099,7 +2115,7 @@ function FilaNueva(props: {
       <td className="num muted">{eur(debe)}</td>
       <td>
         <label className="yapagado" title="Registrar también el cobro, con el cobrador y método de la barra «Al cobrar»">
-          <input type="checkbox" checked={yaPagado} onChange={(ev) => setYaPagado(ev.target.checked)} />
+          <input type="checkbox" checked={yaPagado && !homenajeado} disabled={homenajeado} onChange={(ev) => setYaPagado(ev.target.checked)} />
           Ya ha pagado
         </label>
       </td>

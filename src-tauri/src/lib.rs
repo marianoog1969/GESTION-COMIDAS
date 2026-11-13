@@ -125,6 +125,9 @@ struct Participante {
     menu_id: Option<i64>,
     #[serde(default)]
     menu: Option<String>,
+    /// Homenajeado/a: va a la comida pero no paga (su comida sale del fondo del regalo)
+    #[serde(default)]
+    homenajeado: bool,
 }
 
 /// Tipo de menú configurable (solo nombre, sin precio).
@@ -206,10 +209,16 @@ struct Resumen {
     pendiente_regalo: i64,
     cobrado_efectivo: i64,
     cobrado_bizum: i64,
+    /// Homenajeados (no pagan) y lo que cuesta su comida, que sale del fondo del regalo
+    homenajeados: i64,
+    comida_homenajeados: i64,
+    /// Dinero extra (p. ej. sobrante de otros años) añadido al regalo o a la comida
+    aportes_regalo: i64,
+    aportes_comida: i64,
     /// Gastos del regalo
     gastos: i64,
     gastado: i64,
-    /// cobrado_regalo − gastado
+    /// cobrado_regalo + aportes_regalo − gastado − comida de los homenajeados
     disponible_regalo: i64,
     /// Traspasos entre cobradores (no cambian el total)
     traspasos: i64,
@@ -225,6 +234,7 @@ struct Datos {
     gastos: Vec<Gasto>,
     traspasos: Vec<Traspaso>,
     menus: Vec<Menu>,
+    aportes: Vec<Aporte>,
 }
 
 #[derive(Serialize)]
@@ -266,6 +276,13 @@ fn init_db(c: &Connection) -> rusqlite::Result<()> {
             cobrador_id INTEGER,
             metodo TEXT
          );
+         CREATE TABLE IF NOT EXISTS aportes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            concepto TEXT NOT NULL,
+            importe INTEGER NOT NULL,
+            fecha TEXT NOT NULL,
+            destino TEXT NOT NULL
+         );
          CREATE TABLE IF NOT EXISTS traspasos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             fecha TEXT NOT NULL,
@@ -290,7 +307,7 @@ fn init_db(c: &Connection) -> rusqlite::Result<()> {
             columnas.push(n?);
         }
     }
-    for (col, tipo) in [("cobrador_id", "INTEGER"), ("metodo_pago", "TEXT"), ("menu_id", "INTEGER")] {
+    for (col, tipo) in [("cobrador_id", "INTEGER"), ("metodo_pago", "TEXT"), ("menu_id", "INTEGER"), ("homenajeado", "INTEGER NOT NULL DEFAULT 0")] {
         if !columnas.iter().any(|x| x == col) {
             c.execute(
                 &format!("ALTER TABLE participantes ADD COLUMN {} {}", col, tipo),
@@ -318,7 +335,7 @@ fn abrir_db(ruta: &Path, crear: bool) -> Res<Connection> {
         let filas = st.query_map([], |r| r.get::<_, String>(0)).map_err(e)?;
         filas.collect::<Result<_, _>>().map_err(e)?
     };
-    let propias = ["config", "participantes", "cobradores", "gastos", "traspasos", "menus", "presencia", "sqlite_sequence"];
+    let propias = ["config", "participantes", "cobradores", "gastos", "traspasos", "menus", "aportes", "presencia", "sqlite_sequence"];
     if !tablas.is_empty() && !tablas.iter().any(|t| t == "participantes") {
         return Err("Ese archivo no es una base de datos de Celebración".into());
     }
@@ -376,6 +393,9 @@ fn regalo_de(p: &Participante, cfg: &Config) -> i64 {
 }
 
 fn debe_de(p: &Participante, cfg: &Config) -> i64 {
+    if p.homenajeado {
+        return 0;
+    }
     let regalo = regalo_de(p, cfg);
     regalo + if p.comida { cfg.precio_comida } else { 0 }
 }
@@ -384,7 +404,7 @@ fn leer_participantes(c: &Connection, cfg: &Config) -> Res<Vec<Participante>> {
     let mut st = c
         .prepare(
             "SELECT p.id,p.nombre,p.comida,p.pagado,p.fecha_pago,p.notas,p.importe_regalo,
-                    p.cobrador_id,c.nombre,p.metodo_pago,p.menu_id,m.nombre
+                    p.cobrador_id,c.nombre,p.metodo_pago,p.menu_id,m.nombre,p.homenajeado
              FROM participantes p LEFT JOIN cobradores c ON c.id=p.cobrador_id
                                   LEFT JOIN menus m ON m.id=p.menu_id
              ORDER BY p.nombre COLLATE NOCASE",
@@ -406,6 +426,7 @@ fn leer_participantes(c: &Connection, cfg: &Config) -> Res<Vec<Participante>> {
                 metodo: r.get(9)?,
                 menu_id: r.get(10)?,
                 menu: r.get(11)?,
+                homenajeado: r.get::<_, i64>(12)? != 0,
             })
         })
         .map_err(e)?;
@@ -419,6 +440,14 @@ fn leer_participantes(c: &Connection, cfg: &Config) -> Res<Vec<Participante>> {
 fn calcular_resumen(ps: &[Participante], cfg: &Config) -> Resumen {
     let mut r = Resumen::default();
     for p in ps {
+        if p.homenajeado {
+            // Va a la comida pero no paga: ni cobrado ni pendiente
+            r.total_personas += 1;
+            r.con_comida += 1;
+            r.homenajeados += 1;
+            r.comida_homenajeados += cfg.precio_comida;
+            continue;
+        }
         let regalo = regalo_de(p, cfg);
         let comida = if p.comida { cfg.precio_comida } else { 0 };
         r.total_personas += 1;
@@ -448,6 +477,69 @@ fn calcular_resumen(ps: &[Participante], cfg: &Config) -> Resumen {
     r.cobrado = r.cobrado_comida + r.cobrado_regalo;
     r.pendiente = r.pendiente_comida + r.pendiente_regalo;
     r
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct Aporte {
+    id: Option<i64>,
+    concepto: String,
+    importe: i64,
+    fecha: String,
+    /// "regalo" o "comida"
+    destino: String,
+}
+
+fn leer_aportes(c: &Connection) -> Res<Vec<Aporte>> {
+    let mut st = c
+        .prepare("SELECT id,concepto,importe,fecha,destino FROM aportes ORDER BY fecha DESC, id DESC")
+        .map_err(e)?;
+    let filas = st
+        .query_map([], |r| {
+            Ok(Aporte {
+                id: Some(r.get(0)?),
+                concepto: r.get(1)?,
+                importe: r.get(2)?,
+                fecha: r.get(3)?,
+                destino: r.get(4)?,
+            })
+        })
+        .map_err(e)?;
+    filas.collect::<Result<_, _>>().map_err(e)
+}
+
+fn aplicar_aportes(r: &mut Resumen, ap: &[Aporte]) {
+    r.aportes_regalo = ap.iter().filter(|a| a.destino == "regalo").map(|a| a.importe).sum();
+    r.aportes_comida = ap.iter().filter(|a| a.destino == "comida").map(|a| a.importe).sum();
+    r.disponible_regalo += r.aportes_regalo;
+}
+
+#[tauri::command(async)]
+fn guardar_aporte(s: State<AppState>, aporte: Aporte) -> Res<()> {
+    let concepto = aporte.concepto.trim().to_string();
+    if concepto.is_empty() {
+        return Err("Indica de dónde viene el dinero (concepto)".into());
+    }
+    if aporte.importe <= 0 {
+        return Err("El importe debe ser mayor que 0".into());
+    }
+    if aporte.destino != "regalo" && aporte.destino != "comida" {
+        return Err("El destino debe ser regalo o comida".into());
+    }
+    let g = s.db.lock().map_err(e)?;
+    con(&g)?
+        .execute(
+            "INSERT INTO aportes(concepto,importe,fecha,destino) VALUES(?1,?2,?3,?4)",
+            params![concepto, aporte.importe, aporte.fecha, aporte.destino],
+        )
+        .map_err(e)?;
+    Ok(())
+}
+
+#[tauri::command(async)]
+fn eliminar_aporte(s: State<AppState>, id: i64) -> Res<()> {
+    let g = s.db.lock().map_err(e)?;
+    con(&g)?.execute("DELETE FROM aportes WHERE id=?1", params![id]).map_err(e)?;
+    Ok(())
 }
 
 fn leer_gastos(c: &Connection) -> Res<Vec<Gasto>> {
@@ -503,7 +595,7 @@ fn leer_traspasos(c: &Connection) -> Res<Vec<Traspaso>> {
 fn aplicar_movimientos(r: &mut Resumen, gs: &[Gasto], ts: &[Traspaso]) {
     r.gastos = gs.len() as i64;
     r.gastado = gs.iter().map(|g| g.importe).sum();
-    r.disponible_regalo = r.cobrado_regalo - r.gastado;
+    r.disponible_regalo = r.cobrado_regalo - r.gastado - r.comida_homenajeados;
     r.traspasos = ts.len() as i64;
     r.traspasado = ts.iter().map(|t| t.importe).sum();
 }
@@ -700,6 +792,8 @@ fn cargar(s: State<AppState>) -> Res<Datos> {
     let menus = leer_menus(&tx)?;
     let mut resumen = calcular_resumen(&participantes, &config);
     aplicar_movimientos(&mut resumen, &gastos, &traspasos);
+    let aportes = leer_aportes(&tx)?;
+    aplicar_aportes(&mut resumen, &aportes);
     let cobradores = calcular_cobradores(&tx, &participantes, &gastos, &traspasos)?;
     tx.commit().map_err(e)?;
     Ok(Datos {
@@ -710,6 +804,7 @@ fn cargar(s: State<AppState>) -> Res<Datos> {
         gastos,
         traspasos,
         menus,
+        aportes,
     })
 }
 
@@ -883,7 +978,8 @@ fn guardar_participante(s: State<AppState>, participante: Participante) -> Res<i
     }
     let g = s.db.lock().map_err(e)?;
     let db = con(&g)?;
-    let menu = if participante.comida {
+    let comida = participante.comida || participante.homenajeado;
+    let menu = if comida {
         menu_valido(db, participante.menu_id)?
     } else {
         None
@@ -892,14 +988,15 @@ fn guardar_participante(s: State<AppState>, participante: Participante) -> Res<i
         Some(id) => {
             let n = db
                 .execute(
-                    "UPDATE participantes SET nombre=?1, comida=?2, notas=?3, importe_regalo=?4, menu_id=?6 WHERE id=?5",
+                    "UPDATE participantes SET nombre=?1, comida=?2, notas=?3, importe_regalo=?4, menu_id=?6, homenajeado=?7 WHERE id=?5",
                     params![
                         nombre,
-                        participante.comida as i64,
+                        comida as i64,
                         participante.notas.trim(),
                         participante.importe_regalo,
                         id,
-                        menu
+                        menu,
+                        participante.homenajeado as i64
                     ],
                 )
                 .map_err(e)?;
@@ -910,13 +1007,14 @@ fn guardar_participante(s: State<AppState>, participante: Participante) -> Res<i
         }
         None => {
             db.execute(
-                "INSERT INTO participantes(nombre,comida,notas,importe_regalo,menu_id) VALUES(?1,?2,?3,?4,?5)",
+                "INSERT INTO participantes(nombre,comida,notas,importe_regalo,menu_id,homenajeado) VALUES(?1,?2,?3,?4,?5,?6)",
                 params![
                     nombre,
-                    participante.comida as i64,
+                    comida as i64,
                     participante.notas.trim(),
                     participante.importe_regalo,
-                    menu
+                    menu,
+                    participante.homenajeado as i64
                 ],
             )
             .map_err(e)?;
@@ -940,6 +1038,8 @@ fn actualizar_participante(
     menu_id: Option<i64>,
     // Céntimos; -1 = volver al regalo general
     importe_regalo: Option<i64>,
+    // Homenajeado/a: no paga; se quita cualquier cobro
+    homenajeado: Option<bool>,
 ) -> Res<()> {
     let nombre = nombre.map(|n| n.trim().to_string());
     if nombre.as_deref() == Some("") {
@@ -955,7 +1055,12 @@ fn actualizar_participante(
         .execute(
             "UPDATE participantes
              SET nombre=COALESCE(?2, nombre),
-                 comida=COALESCE(?3, comida),
+                 comida=CASE WHEN ?7=1 THEN 1 ELSE COALESCE(?3, comida) END,
+                 homenajeado=COALESCE(?7, homenajeado),
+                 pagado=CASE WHEN ?7=1 THEN 0 ELSE pagado END,
+                 fecha_pago=CASE WHEN ?7=1 THEN NULL ELSE fecha_pago END,
+                 cobrador_id=CASE WHEN ?7=1 THEN NULL ELSE cobrador_id END,
+                 metodo_pago=CASE WHEN ?7=1 THEN NULL ELSE metodo_pago END,
                  notas=COALESCE(?4, notas),
                  menu_id=CASE WHEN ?3=0 THEN NULL
                               WHEN ?5 IS NULL THEN menu_id
@@ -971,7 +1076,8 @@ fn actualizar_participante(
                 comida.map(|c| c as i64),
                 notas.map(|n| n.trim().to_string()),
                 menu_id,
-                importe_regalo
+                importe_regalo,
+                homenajeado.map(|h| h as i64)
             ],
         )
         .map_err(e)?;
@@ -1017,6 +1123,12 @@ fn marcar_pagado(
         .optional()
         .map_err(e)?;
     let (nombre, ya_pagado, quien, como) = actual.ok_or_else(|| NO_EXISTE.to_string())?;
+    let hom: i64 = db
+        .query_row("SELECT homenajeado FROM participantes WHERE id=?1", params![id], |r| r.get(0))
+        .map_err(e)?;
+    if hom != 0 && pagado {
+        return Err(format!("{} es homenajeado/a: no paga", nombre));
+    }
     if let Some(d) = desde {
         if d != ya_pagado {
             return Err(if ya_pagado {
@@ -1097,8 +1209,8 @@ fn restaurar_participante(s: State<AppState>, participante: Participante) -> Res
         }
         None => None,
     };
-    let pagado = participante.pagado;
-    let menu_id = if participante.comida {
+    let pagado = participante.pagado && !participante.homenajeado;
+    let menu_id = if participante.comida || participante.homenajeado {
         menu_valido(&db, participante.menu_id).unwrap_or(None)
     } else {
         None
@@ -1115,8 +1227,8 @@ fn restaurar_participante(s: State<AppState>, participante: Participante) -> Res
     };
     let id = if ocupado == 0 { participante.id } else { None };
     db.execute(
-        "INSERT INTO participantes(id,nombre,comida,pagado,fecha_pago,notas,importe_regalo,cobrador_id,metodo_pago,menu_id)
-         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+        "INSERT INTO participantes(id,nombre,comida,pagado,fecha_pago,notas,importe_regalo,cobrador_id,metodo_pago,menu_id,homenajeado)
+         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
         params![
             id,
             nombre,
@@ -1127,7 +1239,8 @@ fn restaurar_participante(s: State<AppState>, participante: Participante) -> Res
             participante.importe_regalo,
             if pagado { cobrador_id } else { None },
             if pagado { participante.metodo.clone() } else { None },
-            menu_id
+            menu_id,
+            participante.homenajeado as i64
         ],
     )
     .map_err(e)?;
@@ -1585,6 +1698,7 @@ fn bd_vacia(c: &Connection) -> Res<bool> {
                   + (SELECT COUNT(*) FROM gastos)
                   + (SELECT COUNT(*) FROM traspasos)
                   + (SELECT COUNT(*) FROM menus)
+                  + (SELECT COUNT(*) FROM aportes)
                   + (SELECT COUNT(*) FROM config)",
             [],
             |r| r.get(0),
@@ -2266,6 +2380,8 @@ pub fn run() {
             guardar_gasto,
             actualizar_gasto,
             eliminar_gasto,
+            guardar_aporte,
+            eliminar_aporte,
             restaurar_gasto,
             guardar_traspaso,
             actualizar_traspaso,
@@ -2460,6 +2576,49 @@ mod tests {
         std::fs::write(&principal, b"x").unwrap();
         assert_eq!(sin_base(&principal, "exe", &ev), SinBase::Normal);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn homenajeados_no_pagan_y_su_comida_sale_del_regalo() {
+        let cfg = Config {
+            evento: String::new(),
+            fecha: String::new(),
+            regalo_desc: String::new(),
+            precio_comida: 2000,
+            precio_regalo: 1000,
+        };
+        let mk = |n: &str, pagado: bool, hom: bool| Participante {
+            id: None,
+            nombre: n.into(),
+            comida: true,
+            pagado,
+            fecha_pago: None,
+            notas: String::new(),
+            importe_regalo: None,
+            debe: 0,
+            cobrador_id: None,
+            cobrador: None,
+            metodo: Some("efectivo".into()),
+            menu_id: None,
+            menu: None,
+            homenajeado: hom,
+        };
+        let ps = vec![mk("A", true, false), mk("B", false, false), mk("H1", false, true), mk("H2", false, true)];
+        assert_eq!(debe_de(&ps[2], &cfg), 0);
+        let mut r = calcular_resumen(&ps, &cfg);
+        aplicar_movimientos(&mut r, &[], &[]);
+        assert_eq!((r.total_personas, r.con_comida, r.homenajeados), (4, 4, 2));
+        assert_eq!((r.pagados, r.pendientes), (1, 1));
+        assert_eq!(r.total_esperado, 6000);
+        assert_eq!(r.comida_homenajeados, 4000);
+        assert_eq!(r.cobrado_regalo, 1000);
+        assert_eq!(r.disponible_regalo, 1000 - 4000);
+        let ap = vec![
+            Aporte { id: None, concepto: "Sobrante 2025".into(), importe: 5000, fecha: "2026-01-01".into(), destino: "regalo".into() },
+            Aporte { id: None, concepto: "Sobrante 2025".into(), importe: 700, fecha: "2026-01-01".into(), destino: "comida".into() },
+        ];
+        aplicar_aportes(&mut r, &ap);
+        assert_eq!((r.aportes_regalo, r.aportes_comida, r.disponible_regalo), (5000, 700, 2000));
     }
 
     #[test]
