@@ -241,26 +241,6 @@ export function informePdf(d: Datos): Uint8Array {
     });
   }
 
-  // Gastos más caros
-  if (d.gastos.length >= 2) {
-    const top = [...d.gastos].sort((x, y) => y.importe - x.importe).slice(0, 5);
-    autoTable(doc, {
-      ...estiloTabla,
-      startY: titulo("Gastos más caros"),
-      head: [["#", "Concepto", "Importe", "% del gasto"]],
-      body: top.map((g, i) => [
-        String(i + 1),
-        g.concepto,
-        eur(g.importe),
-        r.gastado > 0 ? `${Math.round((g.importe / r.gastado) * 100)} %` : "-",
-      ]),
-      columnStyles: { 0: { cellWidth: 10 }, 2: num, 3: num },
-      didParseCell: (h) => {
-        if (h.column.index >= 2) h.cell.styles.halign = "right";
-      },
-    });
-  }
-
   // Resumen del regalo (aparte de la lista de gastos)
   autoTable(doc, {
     ...estiloTabla,
