@@ -70,6 +70,58 @@ export function informePdf(d: Datos): Uint8Array {
     columnStyles: { 1: num, 2: num },
   });
 
+  // Desglose del regalo y de la comida
+  autoTable(doc, {
+    ...estiloTabla,
+    startY: titulo("Fondo del regalo"),
+    head: [["Concepto", "Importe"]],
+    body: [
+      ["Recaudado para el regalo", eur(r.cobrado_regalo)],
+      ...(r.aportes_regalo > 0 ? [["+ Dinero extra (sobrante…)", eur(r.aportes_regalo)]] : []),
+      ["- Gastado", eur(r.gastado)],
+      ...(r.homenajeados > 0
+        ? [[`- Comida de homenajeados (${r.homenajeados})${r.comida_cubierta > 0 ? " tras dinero extra" : ""}`, eur(r.comida_homenajeados - r.comida_cubierta)]]
+        : []),
+    ],
+    foot: [[r.disponible_regalo < 0 ? "Gastado de más" : "Disponible", eur(Math.abs(r.disponible_regalo))]],
+    showFoot: "lastPage",
+    footStyles: { fillColor: [239, 244, 255], textColor: r.disponible_regalo < 0 ? [185, 28, 28] : [21, 128, 61], fontStyle: "bold" },
+    columnStyles: { 1: num },
+    tableWidth: 120,
+    didParseCell: (h) => {
+      if (h.section === "foot" && h.column.index === 1) h.cell.styles.halign = "right";
+    },
+  });
+  if (r.con_comida > 0) {
+    autoTable(doc, {
+      ...estiloTabla,
+      startY: titulo("Comida"),
+      head: [["Concepto", "Importe"]],
+      body: [
+        ["Cobrado para la comida", eur(r.cobrado_comida)],
+        ["+ Falta por cobrar", eur(r.pendiente_comida)],
+        ...(r.homenajeados > 0
+          ? [[`+ Comida de homenajeados (${r.homenajeados})`, eur(r.comida_homenajeados)]]
+          : []),
+        ...(r.homenajeados > 0 && r.comida_cubierta > 0
+          ? [["   cubierta con dinero extra de la comida", eur(r.comida_cubierta)]]
+          : []),
+        ...(r.homenajeados > 0 && r.comida_homenajeados - r.comida_cubierta > 0
+          ? [["   cubierta con el fondo del regalo", eur(r.comida_homenajeados - r.comida_cubierta)]]
+          : []),
+        ...(r.sobrante_comida > 0 ? [["Sobrante del dinero extra de la comida", eur(r.sobrante_comida)]] : []),
+      ],
+      foot: [[`Coste total de la comida (${r.con_comida} comensales)`, eur(r.total_comida + r.comida_homenajeados)]],
+      showFoot: "lastPage",
+      footStyles: { fillColor: [239, 244, 255], textColor: [30, 41, 59], fontStyle: "bold" },
+      columnStyles: { 1: num },
+      tableWidth: 120,
+      didParseCell: (h) => {
+        if (h.section === "foot" && h.column.index === 1) h.cell.styles.halign = "right";
+      },
+    });
+  }
+
   // Quién va a la comida y quién solo aporta al regalo
   {
     const con = d.participantes.filter((p) => p.comida);

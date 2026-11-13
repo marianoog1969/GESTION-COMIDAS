@@ -134,6 +134,8 @@ export default function GastosView(props: {
         </div>
       </section>
 
+      <ResumenComida r={r} />
+
       <div className="tablewrap gastos-tabla">
         <table>
           <thead>
@@ -249,6 +251,57 @@ export default function GastosView(props: {
       )}
       <AportesSeccion aportes={props.aportes} ejecutar={props.ejecutar} />
     </>
+  );
+}
+
+/** Desglose de la comida, igual que el del regalo. */
+function ResumenComida(props: { r: Resumen }) {
+  const r = props.r;
+  if (r.con_comida === 0) return null;
+  const coste = r.total_comida + r.comida_homenajeados;
+  const pct = r.total_comida > 0 ? Math.min(100, Math.round((r.cobrado_comida / r.total_comida) * 100)) : 0;
+  const delRegalo = r.comida_homenajeados - r.comida_cubierta;
+  return (
+    <section className="regalo-resumen comida-resumen" aria-label="Resumen de la comida">
+      <div className="rr-item">
+        <div className="card-title">Cobrado para la comida</div>
+        <div className="rr-valor">{eur(r.cobrado_comida)}</div>
+        <div className="card-sub">de {eur(r.total_comida)} previstos</div>
+      </div>
+      <div className="rr-op">+</div>
+      <div className="rr-item">
+        <div className="card-title">Falta por cobrar</div>
+        <div className={"rr-valor" + (r.pendiente_comida > 0 ? " pendiente" : "")}>{eur(r.pendiente_comida)}</div>
+        <div className="card-sub">de la comida</div>
+      </div>
+      {r.homenajeados > 0 && (
+        <>
+          <div className="rr-op">+</div>
+          <div className="rr-item">
+            <div className="card-title">Comida de homenajeados</div>
+            <div className="rr-valor">{eur(r.comida_homenajeados)}</div>
+            <div className="card-sub">
+              {r.homenajeados} {r.homenajeados === 1 ? "persona" : "personas"}
+              {r.comida_cubierta > 0 && <> · {eur(r.comida_cubierta)} con dinero extra</>}
+              {delRegalo > 0 && <> · {eur(delRegalo)} del regalo</>}
+            </div>
+          </div>
+        </>
+      )}
+      <div className="rr-op">=</div>
+      <div className="rr-item destacado good">
+        <div className="card-title">Coste total de la comida</div>
+        <div className="rr-valor">{eur(coste)}</div>
+        <div className="card-sub">
+          {r.con_comida} {r.con_comida === 1 ? "comensal" : "comensales"}
+          {r.aportes_comida > 0 && <> · dinero extra {eur(r.aportes_comida)}</>}
+          {r.sobrante_comida > 0 && <> (sobran {eur(r.sobrante_comida)})</>}
+        </div>
+      </div>
+      <div className="rr-barra" aria-label={`${pct}% de la comida cobrado`}>
+        <div className="bar" style={{ width: pct + "%" }} />
+      </div>
+    </section>
   );
 }
 
