@@ -261,6 +261,32 @@ export function informePdf(d: Datos): Uint8Array {
       fuente: 8,
       der: [1, 2, 3, 4, 5, 6, 7, 8],
     });
+    // Cuenta de cada cobrador: lo que cobró, lo que gastó comprando y lo que le queda
+    d.cobradores.forEach((k) => {
+      const suyos = d.gastos.filter((g) => g.cobrador_id === k.id);
+      if (k.cobros === 0 && suyos.length === 0 && k.recibido === 0 && k.entregado === 0) return;
+      sub(`Cuenta de ${k.nombre}`);
+      tabla({
+        head: [["Concepto", "Importe"]],
+        body: [
+          [`Cobrado (${k.cobros} ${k.cobros === 1 ? "cobro" : "cobros"}: ${eur(k.efectivo)} efectivo, ${eur(k.bizum)} Bizum)`, eur(k.total)],
+          [`- Gastado en el regalo (${suyos.length} ${suyos.length === 1 ? "gasto" : "gastos"})`, eur(k.gastado)],
+          ...(k.recibido > 0 ? [["+ Recibido de otros cobradores", eur(k.recibido)]] : []),
+          ...(k.entregado > 0 ? [["- Entregado a otros cobradores", eur(k.entregado)]] : []),
+        ],
+        foot: [["= Tiene ahora", eur(k.saldo)]],
+        der: [1],
+      });
+      if (suyos.length > 0) {
+        tabla({
+          head: [["Fecha", "Gasto pagado por " + k.nombre, "Importe"]],
+          body: suyos.map((g) => [fmtFecha(g.fecha), g.concepto, eur(g.importe)]),
+          der: [2],
+          ancho: [26, 0, 28],
+          fuente: 8,
+        });
+      }
+    });
     if (d.traspasos.length > 0) {
       sub("Traspasos entre cobradores");
       tabla({
