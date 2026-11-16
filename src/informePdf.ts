@@ -177,15 +177,23 @@ export function informePdf(d: Datos): Uint8Array {
     });
 
     if (d.menus.length > 0) {
-      const sin = d.participantes.filter((p) => p.comida && !p.menu_id).length;
-      const filas: (string | number)[][] = d.menus.map((k) => [k.nombre, k.personas]);
-      if (sin > 0) filas.push(["(sin elegir)", sin]);
+      const nom = (p: (typeof d.participantes)[number]) => (p.homenajeado ? `${p.nombre} (homenajeado)` : p.nombre);
+      const sin = d.participantes.filter((p) => p.comida && !p.menu_id);
+      const filas: (string | number)[][] = d.menus.map((k) => [
+        k.nombre,
+        k.personas,
+        d.participantes.filter((p) => p.menu_id === k.id).map(nom).join(", "),
+      ]);
+      if (sin.length > 0) filas.push(["SIN ELEGIR", sin.length, sin.map(nom).join(", ")]);
       sub("Menús elegidos", "incluye homenajeados");
       tabla({
-        head: [["Menú", "Personas"]],
+        head: [["Menú", "Personas", "Quién"]],
         body: filas,
-        foot: [["Total con comida", String(r.con_comida)]],
+        foot: [["Total con comida", String(r.con_comida), ""]],
         der: [1],
+        ancho: [32, 20, 0],
+        fuente: 8,
+        rojo: (f) => f[0] === "SIN ELEGIR",
       });
     }
 
