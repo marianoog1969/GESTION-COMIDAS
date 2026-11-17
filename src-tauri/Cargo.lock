@@ -291,7 +291,7 @@ dependencies = [
 
 [[package]]
 name = "celebracion"
-version = "0.10.15"
+version = "0.10.16"
 dependencies = [
  "rusqlite",
  "serde",

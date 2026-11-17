@@ -1367,6 +1367,19 @@ export default function App() {
         </table>
       </div>
       )}
+      {vista === "personas" && datos.participantes.length > 0 && (
+        <div className="resultado" aria-live="polite">
+          <span>
+            Mostrando <b>{lista.length}</b> de {datos.participantes.length}
+          </span>
+          <span>
+            Importe <b>{eur(lista.reduce((t, p) => t + p.debe, 0))}</b>
+          </span>
+          <span className={lista.some((p) => !p.pagado && !p.homenajeado) ? "mal" : "bien"}>
+            Por cobrar <b>{eur(lista.reduce((t, p) => t + (p.pagado || p.homenajeado ? 0 : p.debe), 0))}</b>
+          </span>
+        </div>
+      )}
       <p className="hint muted">
         Haz clic en una celda para editarla · <kbd>Enter</kbd> guarda · <kbd>Esc</kbd> cancela
         · <kbd>Ctrl</kbd>+<kbd>N</kbd> {vista === "gastos" ? "nuevo gasto" : vista === "traspasos" ? "nuevo traspaso" : "nueva persona"}

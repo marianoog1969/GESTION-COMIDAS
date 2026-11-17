@@ -1684,3 +1684,21 @@ label.check input { width: auto; margin: 0; }
 .aportes .addrow input:first-child { flex: 2 1 220px; }
 .aportes .addrow input:not(:first-child) { flex: 1 1 110px; }
 .aportes .addrow select { flex: 0 0 auto; cursor: pointer; }
+
+/* ─── Pulido de usabilidad ─── */
+.menubar { margin: 10px 0 12px; padding: 0 2px; }
+.resultado {
+  display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center;
+  margin: 8px 2px 2px; padding: 8px 14px; font-size: 13px; color: var(--muted, #64748b);
+  background: var(--panel, #fff); border: 1px solid var(--line, #e2e8f0); border-radius: 10px;
+}
+.resultado b { color: var(--text, #0f172a); font-variant-numeric: tabular-nums; }
+.resultado .mal b { color: var(--bad, #b42318); }
+.resultado .bien b { color: var(--good, #15803d); }
+tr.unpaid td:first-child { box-shadow: inset 3px 0 0 var(--bad, #b42318); }
+tr.paid td:first-child { box-shadow: inset 3px 0 0 var(--good, #15803d); }
+button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--primary, #1d4ed8); outline-offset: 2px;
+}
+td.num, th.num, .importe { font-variant-numeric: tabular-nums; }
+@media print { .resultado { display: none; } }
