@@ -27,6 +27,7 @@ export function informePdf(d: Datos): Uint8Array {
   const ancho = doc.internal.pageSize.getWidth();
   const m = 15;
   const util = ancho - 2 * m;
+  const rg = c.usa_regalo;
   const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)} %` : "-");
 
   // ── Cabecera ──
@@ -35,15 +36,15 @@ export function informePdf(d: Datos): Uint8Array {
   doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(...GRIS);
   let cur = 27;
   if (c.fecha) { doc.text(`Fecha / lugar: ${c.fecha}`, m, cur); cur += 5; }
-  if (c.regalo_desc) { doc.text(`Regalo: ${c.regalo_desc}`, m, cur); cur += 5; }
+  if (rg && c.regalo_desc) { doc.text(`Regalo: ${c.regalo_desc}`, m, cur); cur += 5; }
   doc.text(`Informe generado el ${new Date().toLocaleString("es-ES")}`, m, cur);
   cur += 6;
 
   // ── Cuatro cifras clave ──
   {
     const cajas: { t: string; v: string; s: string; col: RGB }[] = [
-      { t: "PARTICIPANTES", v: String(r.total_personas), s: `${r.con_comida} con comida · ${r.solo_regalo} solo regalo`, col: OSCURO },
-      { t: "TOTAL PREVISTO", v: eur(r.total_esperado), s: `Comida ${eur(r.total_comida).replace(",00", "")} · Regalo ${eur(r.total_regalo).replace(",00", "")}`, col: OSCURO },
+      { t: "PARTICIPANTES", v: String(r.total_personas), s: rg ? `${r.con_comida} con comida · ${r.solo_regalo} solo regalo` : `${r.con_comida} con comida`, col: OSCURO },
+      { t: "TOTAL PREVISTO", v: eur(r.total_esperado), s: rg ? `Comida ${eur(r.total_comida).replace(",00", "")} · Regalo ${eur(r.total_regalo).replace(",00", "")}` : `${r.con_comida} comensales`, col: OSCURO },
       { t: "RECOGIDO YA", v: eur(r.cobrado), s: `${r.pagados} personas · ${pct(r.cobrado, r.total_esperado)}`, col: VERDE },
       { t: "POR RECIBIR", v: eur(r.pendiente), s: `${r.pendientes} ${r.pendientes === 1 ? "persona" : "personas"}`, col: r.pendiente > 0 ? ROJO : VERDE },
     ];
@@ -64,7 +65,9 @@ export function informePdf(d: Datos): Uint8Array {
     if (cur > hasta) { doc.addPage(); cur = 18; }
   };
   /** Banda azul de sección numerada. */
-  const seccion = (n: number, txt: string) => {
+  let nSec = 0;
+  const seccion = (_n: number, txt: string) => {
+    const n = ++nSec;
     nuevaPaginaSi(235);
     cur += 9;
     doc.setFillColor(...AZUL).roundedRect(m, cur, util, 8, 1.5, 1.5, "F");
@@ -137,7 +140,7 @@ export function informePdf(d: Datos): Uint8Array {
     head: [["", "Previsto", "Recogido ya", "Por recibir", "% recogido"]],
     body: [
       ["Comida", eur(r.total_comida), eur(r.cobrado_comida), eur(r.pendiente_comida), pct(r.cobrado_comida, r.total_comida)],
-      ["Regalo", eur(r.total_regalo), eur(r.cobrado_regalo), eur(r.pendiente_regalo), pct(r.cobrado_regalo, r.total_regalo)],
+      ...(rg ? [["Regalo", eur(r.total_regalo), eur(r.cobrado_regalo), eur(r.pendiente_regalo), pct(r.cobrado_regalo, r.total_regalo)]] : []),
     ],
     foot: [["Total", eur(r.total_esperado), eur(r.cobrado), eur(r.pendiente), pct(r.cobrado, r.total_esperado)]],
     der: [1, 2, 3, 4],
@@ -150,7 +153,7 @@ export function informePdf(d: Datos): Uint8Array {
     sub(`Por recibir de ${debe.length} ${debe.length === 1 ? "persona" : "personas"}`);
     tabla({
       head: [["Nombre", "Modalidad", "Importe"]],
-      body: debe.map((p) => [p.nombre, p.comida ? "Comida + regalo" : "Solo regalo", eur(p.debe)]),
+      body: debe.map((p) => [p.nombre, p.comida ? (rg ? "Comida + regalo" : "Comida") : "Solo regalo", eur(p.debe)]),
       foot: [["", "Total por recibir", eur(r.pendiente)]],
       der: [2],
       pie: ROJO,
@@ -168,9 +171,9 @@ export function informePdf(d: Datos): Uint8Array {
     tabla({
       head: [["Modalidad", "Personas", "Importe"]],
       body: [
-        ["Van a la comida (comida + regalo)", con.length, eur(suma(con))],
+        [rg ? "Van a la comida (comida + regalo)" : "Van a la comida", con.length, eur(suma(con))],
         ...(hom.length > 0 ? [["Homenajeados (no pagan)", hom.length, eur(0)]] : []),
-        ["Solo aportan al regalo", solo.length, eur(suma(solo))],
+        ...(rg ? [["Solo aportan al regalo", solo.length, eur(suma(solo))]] : []),
       ],
       foot: [["Total", String(d.participantes.length), eur(suma(d.participantes))]],
       der: [1, 2],
@@ -215,45 +218,49 @@ export function informePdf(d: Datos): Uint8Array {
   }
 
   // ═══════════ 3. REGALO ═══════════
-  seccion(3, "Regalo");
-  sub("Resumen del regalo");
-  tabla({
-    head: [["Concepto", "Importe"]],
-    body: [
-      ["Total recaudado", eur(r.cobrado_regalo)],
-      ...(r.aportes_regalo > 0 ? [["+ Dinero extra añadido (sobrante)", eur(r.aportes_regalo)]] : []),
-      ["- Total gastado", eur(r.gastado)],
-      ...(r.homenajeados > 0
-        ? [[`- Comida de homenajeados (${r.homenajeados})${r.comida_cubierta > 0 ? ", tras dinero extra de la comida" : ""}`, eur(r.comida_homenajeados - r.comida_cubierta)]]
-        : []),
-    ],
-    foot: [[r.disponible_regalo < 0 ? "= Gastado de más" : "= Disponible para el regalo", eur(Math.abs(r.disponible_regalo))]],
-    der: [1],
-    pie: r.disponible_regalo < 0 ? ROJO : VERDE,
-  });
-  if (r.pendiente_regalo > 0) {
-    texto(`Previsto si pagan todos (faltan ${eur(r.pendiente_regalo)} por recibir): ${eur(r.disponible_regalo + r.pendiente_regalo)}`);
-  }
+  if (rg) {
+    seccion(3, "Regalo");
+    sub("Resumen del regalo");
+    tabla({
+      head: [["Concepto", "Importe"]],
+      body: [
+        ["Total recaudado", eur(r.cobrado_regalo)],
+        ...(r.aportes_regalo > 0 ? [["+ Dinero extra añadido (sobrante)", eur(r.aportes_regalo)]] : []),
+        ["- Total gastado", eur(r.gastado)],
+        ...(r.homenajeados > 0
+          ? [[`- Comida de homenajeados (${r.homenajeados})${r.comida_cubierta > 0 ? ", tras dinero extra de la comida" : ""}`, eur(r.comida_homenajeados - r.comida_cubierta)]]
+          : []),
+      ],
+      foot: [[r.disponible_regalo < 0 ? "= Gastado de más" : "= Disponible para el regalo", eur(Math.abs(r.disponible_regalo))]],
+      der: [1],
+      pie: r.disponible_regalo < 0 ? ROJO : VERDE,
+    });
+    if (r.pendiente_regalo > 0) {
+      texto(`Previsto si pagan todos (faltan ${eur(r.pendiente_regalo)} por recibir): ${eur(r.disponible_regalo + r.pendiente_regalo)}`);
+    }
 
-  if (d.gastos.length > 0) {
-    sub(`Gastos del regalo (${d.gastos.length})`);
-    tabla({
-      head: [["Fecha", "Concepto", "Pagado por", "Importe"]],
-      body: d.gastos.map((g) => [fmtFecha(g.fecha), g.concepto, g.cobrador ?? "", eur(g.importe)]),
-      foot: [["", "", "Total gastado", eur(r.gastado)]],
-      der: [3],
-      ancho: [26, 0, 40, 28],
-    });
-  }
-  if (d.aportes.length > 0) {
-    sub("Dinero extra (sobrante de otros años…)");
-    tabla({
-      head: [["Fecha", "Concepto", "Destino", "Importe"]],
-      body: d.aportes.map((a) => [fmtFecha(a.fecha), a.concepto, a.destino === "regalo" ? "Regalo" : "Comida", eur(a.importe)]),
-      foot: [["", "", "Total", eur(r.aportes_regalo + r.aportes_comida)]],
-      der: [3],
-      ancho: [26, 0, 40, 28],
-    });
+    if (d.gastos.length > 0) {
+      sub(`Gastos del regalo (${d.gastos.length})`);
+      tabla({
+        head: [["Fecha", "Concepto", "Pagado por", "Importe"]],
+        body: d.gastos.map((g) => [fmtFecha(g.fecha), g.concepto, g.cobrador ?? "", eur(g.importe)]),
+        foot: [["", "", "Total gastado", eur(r.gastado)]],
+        der: [3],
+        ancho: [26, 0, 40, 28],
+      });
+    }
+    if (d.aportes.length > 0) {
+      sub("Dinero extra (sobrante de otros años…)");
+      tabla({
+        head: [["Fecha", "Concepto", "Destino", "Importe"]],
+        body: d.aportes.map((a) => [fmtFecha(a.fecha), a.concepto, a.destino === "regalo" ? "Regalo" : "Comida", eur(a.importe)]),
+        foot: [["", "", "Total", eur(r.aportes_regalo + r.aportes_comida)]],
+        der: [3],
+        ancho: [26, 0, 40, 28],
+      });
+    }
+
+
   }
 
   // ═══════════ 4. DINERO Y COBRADORES ═══════════
@@ -278,7 +285,7 @@ export function informePdf(d: Datos): Uint8Array {
         head: [["Concepto", "Importe"]],
         body: [
           [`Cobrado (${k.cobros} ${k.cobros === 1 ? "cobro" : "cobros"}: ${eur(k.efectivo)} efectivo, ${eur(k.bizum)} Bizum)`, eur(k.total)],
-          [`- Gastado en el regalo (${suyos.length} ${suyos.length === 1 ? "gasto" : "gastos"})`, eur(k.gastado)],
+          ...(rg ? [[`- Gastado en el regalo (${suyos.length} ${suyos.length === 1 ? "gasto" : "gastos"})`, eur(k.gastado)]] : []),
           ...(k.recibido > 0 ? [["+ Recibido de otros cobradores", eur(k.recibido)]] : []),
           ...(k.entregado > 0 ? [["- Entregado a otros cobradores", eur(k.entregado)]] : []),
         ],
@@ -308,11 +315,11 @@ export function informePdf(d: Datos): Uint8Array {
   // ═══════════ 5. PARTICIPANTES ═══════════
   seccion(5, `Participantes (${r.pagados} de ${r.total_personas} han pagado)`);
   tabla({
-    head: [["Nombre", "Modalidad", "Regalo", "Importe", "Estado", "Fecha", "Cobrado por", "Método"]],
+    head: [rg ? ["Nombre", "Modalidad", "Regalo", "Importe", "Estado", "Fecha", "Cobrado por", "Método"] : ["Nombre", "Modalidad", "Importe", "Estado", "Fecha", "Cobrado por", "Método"]],
     body: d.participantes.map((p) => [
       p.nombre,
-      p.homenajeado ? (p.menu ? `${p.menu} (homenajeado)` : "Homenajeado") : p.comida ? (p.menu ? `${p.menu} + regalo` : "Comida + regalo") : "Solo regalo",
-      p.homenajeado ? "" : eur(p.importe_regalo ?? c.precio_regalo),
+      p.homenajeado ? (p.menu ? `${p.menu} (homenajeado)` : "Homenajeado") : p.comida ? (p.menu ? `${p.menu}${rg ? " + regalo" : ""}` : rg ? "Comida + regalo" : "Comida") : "Solo regalo",
+      ...(rg ? [p.homenajeado ? "" : eur(p.importe_regalo ?? c.precio_regalo)] : []),
       eur(p.debe),
       p.homenajeado ? "Homenaje" : p.pagado ? "Pagado" : "Pendiente",
       fmtFecha(p.fecha_pago),
@@ -320,8 +327,8 @@ export function informePdf(d: Datos): Uint8Array {
       p.metodo ? METODO[p.metodo] ?? p.metodo : "",
     ]),
     fuente: 8,
-    der: [2, 3],
-    rojo: (f) => f[4] === "Pendiente",
+    der: rg ? [2, 3] : [2],
+    rojo: (f) => f.includes("Pendiente"),
   });
 
   // ── Pie con número de página ──

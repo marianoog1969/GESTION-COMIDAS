@@ -1702,3 +1702,5 @@ button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focu
 }
 td.num, th.num, .importe { font-variant-numeric: tabular-nums; }
 @media print { .resultado { display: none; } }
+
+table.sin-regalo .c-regalo { display: none; }

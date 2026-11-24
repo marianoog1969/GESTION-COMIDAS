@@ -153,6 +153,11 @@ export default function App() {
   }, []);
 
   // Título de la ventana: «Evento — Comida de celebración»
+  // Sin regalo no existe la pestaña de gastos
+  const sinRegalo = datos ? !datos.config.usa_regalo : false;
+  useEffect(() => {
+    if (sinRegalo && vista === "gastos") setVista("personas");
+  }, [sinRegalo, vista]);
   const nombreEvento = datos?.config.evento;
   useEffect(() => {
     if (nombreEvento === undefined) return;
@@ -432,6 +437,8 @@ export default function App() {
     guardarLS(LS_COBRADOR, String(id));
   };
   // Métodos admitidos según Parámetros; si solo hay uno, se usa siempre ese
+  const hayRegalo = config.usa_regalo;
+  const hayHom = config.usa_homenajeados;
   const metodosOk = METODOS.filter((m) => config.metodos_pago === "ambos" || m.id === config.metodos_pago);
   const metodoActual = metodosOk.some((m) => m.id === ultimoMetodo) ? ultimoMetodo : metodosOk[0].id;
   const elegirMetodo = (m: string) => {
@@ -723,11 +730,12 @@ export default function App() {
           <h1>{config.evento || "Comida de celebración"}</h1>
           <div className="meta">
             {config.fecha && <span><Icono n="calendar" /> {config.fecha}</span>}
-            {config.regalo_desc && <span><Icono n="gift" /> {config.regalo_desc}</span>}
+            {hayRegalo && config.regalo_desc && <span><Icono n="gift" /> {config.regalo_desc}</span>}
             {!sinPrecios && (
               <span>
-                <Icono n="menu" /> Comida {eur(config.precio_comida)} · <Icono n="gift" /> Regalo{" "}
-                {eur(config.precio_regalo)} <span className="muted">por persona</span>
+                <Icono n="menu" /> Comida {eur(config.precio_comida)}
+                {hayRegalo && <> · <Icono n="gift" /> Regalo {eur(config.precio_regalo)}</>}{" "}
+                <span className="muted">por persona</span>
               </span>
             )}
           </div>
@@ -849,11 +857,11 @@ export default function App() {
           valor={String(resumen.total_personas)}
           onClick={() => setFiltro("todos")}
         >
-          {resumen.con_comida} con comida · {resumen.solo_regalo} solo regalo
+          {resumen.con_comida} con comida{hayRegalo && <> · {resumen.solo_regalo} solo regalo</>}
           {resumen.homenajeados > 0 && <> · {resumen.homenajeados} homenajeado{resumen.homenajeados === 1 ? "" : "s"}</>}
         </Card>
         <Card titulo="Total previsto" valor={eur(resumen.total_esperado)}>
-          Comida {eur(resumen.total_comida)} · Regalo {eur(resumen.total_regalo)}
+          {hayRegalo ? <>Comida {eur(resumen.total_comida)} · Regalo {eur(resumen.total_regalo)}</> : <>{resumen.con_comida} comensales</>}
         </Card>
         <Card
           titulo="Cobrado"
@@ -880,7 +888,7 @@ export default function App() {
             onClick={() => setFiltro("pendientes")}
           >
             {resumen.pendientes} {resumen.pendientes === 1 ? "persona" : "personas"} ·
-            Comida {eur(resumen.pendiente_comida)} · Regalo {eur(resumen.pendiente_regalo)}
+            {hayRegalo ? <>Comida {eur(resumen.pendiente_comida)} · Regalo {eur(resumen.pendiente_regalo)}</> : <>de la comida</>}
           </Card>
         )}
       </section>
@@ -913,6 +921,7 @@ export default function App() {
               <Icono n="alert" /> Sin elegir <b>{sinMenu}</b>
             </button>
           )}
+          {hayRegalo && (
           <button
             className={"mchip" + (filtroMenu === "regalo" ? " on" : "")}
             title="Ver a quien solo aporta al regalo"
@@ -920,6 +929,7 @@ export default function App() {
           >
             <Icono n="gift" /> Solo regalo <b>{resumen.solo_regalo}</b>
           </button>
+          )}
           {filtroMenu !== "todos" && (
             <button className="btn linklike" onClick={() => setFiltroMenu("todos")}>
               Quitar filtro de menú
@@ -1012,6 +1022,7 @@ export default function App() {
         >
           <Icono n="users" /> Participantes <span className="count">{resumen.total_personas}</span>
         </button>
+        {hayRegalo && (
         <button
           role="tab"
           aria-selected={vista === "gastos"}
@@ -1026,6 +1037,7 @@ export default function App() {
             </span>
           )}
         </button>
+        )}
         <button
           role="tab"
           aria-selected={vista === "traspasos"}
@@ -1168,13 +1180,13 @@ export default function App() {
         />
       ) : (
       <div className="tablewrap">
-        <table>
+        <table className={hayRegalo ? "" : "sin-regalo"}>
           <thead>
             <tr>
               {cabecera("estado", "Estado", "c-estado")}
               {cabecera("nombre", "Nombre")}
               <th>Modalidad</th>
-              <th className="num">Regalo</th>
+              {hayRegalo && <th className="num c-regalo">Regalo</th>}
               {cabecera("importe", "Importe", "num")}
               {cabecera("cobro", "Cobro")}
               <th>Notas</th>
@@ -1185,6 +1197,8 @@ export default function App() {
             <FilaNueva
               inputRef={nuevoRef}
               precioRegalo={config.precio_regalo}
+              conRegalo={hayRegalo}
+              conHom={hayHom}
               precioComida={config.precio_comida}
               menus={datos.menus}
               nombres={datos.participantes.map((p) => p.nombre)}
@@ -1276,17 +1290,19 @@ export default function App() {
                   >
                     {datos.menus.length === 0 || (p.comida && !p.menu_id) ? (
                       <option value="comida">
-                        {datos.menus.length === 0 ? "Comida + regalo" : "Comida (elegir menú)"}
+                        {datos.menus.length === 0 ? (hayRegalo ? "Comida + regalo" : "Comida") : "Comida (elegir menú)"}
                       </option>
                     ) : null}
                     {datos.menus.map((m) => (
                       <option key={m.id} value={`m:${m.id}`}>
-                        {m.nombre} + regalo
+                        {m.nombre}{hayRegalo ? " + regalo" : ""}
                       </option>
                     ))}
-                    <option value="regalo">Solo regalo</option>
-                    <option value="hom">Homenajeado (no paga){datos.menus.length > 0 ? " · elegir menú" : ""}</option>
-                    {datos.menus.map((m) => (
+                    {(hayRegalo || !p.comida) && <option value="regalo">Solo regalo</option>}
+                    {(hayHom || p.homenajeado) && (
+                      <option value="hom">Homenajeado (no paga){datos.menus.length > 0 ? " · elegir menú" : ""}</option>
+                    )}
+                    {(hayHom || p.homenajeado) && datos.menus.map((m) => (
                       <option key={"h" + m.id} value={`h:${m.id}`}>
                         Homenajeado · {m.nombre}
                       </option>
@@ -1768,6 +1784,8 @@ function ConfigDialog(props: {
   const [regaloDesc, setRegaloDesc] = useState(props.config.regalo_desc);
   const [comida, setComida] = useState(deCentimos(props.config.precio_comida));
   const [regalo, setRegalo] = useState(deCentimos(props.config.precio_regalo));
+  const [usaRegalo, setUsaRegalo] = useState(props.config.usa_regalo ?? true);
+  const [usaHom, setUsaHom] = useState(props.config.usa_homenajeados ?? true);
   const [metodos, setMetodos] = useState<Datos["config"]["metodos_pago"]>(props.config.metodos_pago ?? "ambos");
   const [err, setErr] = useState("");
 
@@ -1779,7 +1797,9 @@ function ConfigDialog(props: {
     regaloDesc !== props.config.regalo_desc ||
     pc !== props.config.precio_comida ||
     pr !== props.config.precio_regalo ||
-    metodos !== (props.config.metodos_pago ?? "ambos");
+    metodos !== (props.config.metodos_pago ?? "ambos") ||
+    usaRegalo !== (props.config.usa_regalo ?? true) ||
+    usaHom !== (props.config.usa_homenajeados ?? true);
 
   const cancelar = () => {
     if (cambiado && !window.confirm("Hay cambios sin guardar. ¿Descartarlos?")) return;
@@ -1849,6 +1869,8 @@ function ConfigDialog(props: {
         precio_comida: pc,
         precio_regalo: pr,
         metodos_pago: metodos,
+        usa_regalo: usaRegalo,
+        usa_homenajeados: usaHom,
       });
     } catch (e) {
       setErr(String(e));
@@ -1886,6 +1908,16 @@ function ConfigDialog(props: {
         </label>
       </div>
 
+      <h3 className="sub">Qué incluye este evento</h3>
+      <label className="check">
+        <input type="checkbox" checked={usaRegalo} onChange={(ev) => setUsaRegalo(ev.target.checked)} />
+        Hay regalo (si no, solo se gestiona la comida)
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={usaHom} onChange={(ev) => setUsaHom(ev.target.checked)} />
+        Hay homenajeados (personas que van a la comida y no pagan)
+      </label>
+
       <h3 className="sub">Importes por persona</h3>
       <div className="two">
         <label>
@@ -1901,6 +1933,7 @@ function ConfigDialog(props: {
             <span>€</span>
           </div>
         </label>
+        {usaRegalo && (
         <label>
           Regalo (general; cada persona puede tener otro)
           <div className={"money" + (pr === null && regalo.trim() ? " invalid" : "")}>
@@ -1914,8 +1947,9 @@ function ConfigDialog(props: {
             <span>€</span>
           </div>
         </label>
+        )}
       </div>
-      {pc !== null && pr !== null && (
+      {usaRegalo && pc !== null && pr !== null && (
         <div className="preview">
           Cada persona pagará: <b>{eur(pc + pr)}</b> con comida · <b>{eur(pr)}</b> solo
           regalo
@@ -2072,6 +2106,8 @@ function ConfigDialog(props: {
 function FilaNueva(props: {
   inputRef: React.RefObject<HTMLInputElement>;
   precioRegalo: number;
+  conRegalo: boolean;
+  conHom: boolean;
   precioComida: number;
   menus: Menu[];
   nombres: string[];
@@ -2138,16 +2174,16 @@ function FilaNueva(props: {
           value={modalidad}
           onChange={(ev) => setModalidad(ev.target.value)}
         >
-          {props.menus.length === 0 && <option value="comida">Comida + regalo</option>}
+          {props.menus.length === 0 && <option value="comida">{props.conRegalo ? "Comida + regalo" : "Comida"}</option>}
           {props.menus.length > 0 && <option value="comida">Comida (elegir menú)</option>}
           {props.menus.map((m) => (
             <option key={m.id} value={`m:${m.id}`}>
-              {m.nombre} + regalo
+              {m.nombre}{props.conRegalo ? " + regalo" : ""}
             </option>
           ))}
-          <option value="regalo">Solo regalo</option>
-          <option value="hom">Homenajeado (no paga){props.menus.length > 0 ? " · elegir menú" : ""}</option>
-          {props.menus.map((m) => (
+          {props.conRegalo && <option value="regalo">Solo regalo</option>}
+          {props.conHom && <option value="hom">Homenajeado (no paga){props.menus.length > 0 ? " · elegir menú" : ""}</option>}
+          {props.conHom && props.menus.map((m) => (
             <option key={"h" + m.id} value={`h:${m.id}`}>
               Homenajeado · {m.nombre}
             </option>

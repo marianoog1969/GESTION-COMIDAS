@@ -1,6 +1,6 @@
 export const CREDITS = {
   appName: "Comida de celebración",
-  version: "0.10.17",
+  version: "0.10.18",
   author: "Mariano Ortuño",
   tech: "Tauri 2 · Rust · React · TypeScript · SQLite",
   year: 2026,

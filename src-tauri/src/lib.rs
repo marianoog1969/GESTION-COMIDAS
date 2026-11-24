@@ -96,6 +96,16 @@ struct Config {
     /// Métodos de pago admitidos: "ambos", "efectivo" o "bizum"
     #[serde(default = "metodos_por_defecto")]
     metodos_pago: String,
+    /// El evento tiene regalo (si no, solo se gestiona la comida)
+    #[serde(default = "verdadero")]
+    usa_regalo: bool,
+    /// Se admiten homenajeados (personas que no pagan)
+    #[serde(default = "verdadero")]
+    usa_homenajeados: bool,
+}
+
+fn verdadero() -> bool {
+    true
 }
 
 fn metodos_por_defecto() -> String {
@@ -398,11 +408,16 @@ fn leer_config(c: &Connection) -> Config {
         metodos_pago: get_key(c, "metodos_pago")
             .filter(|v| matches!(v.as_str(), "ambos" | "efectivo" | "bizum"))
             .unwrap_or_else(metodos_por_defecto),
+        usa_regalo: get_key(c, "usa_regalo").map_or(true, |v| v != "0"),
+        usa_homenajeados: get_key(c, "usa_homenajeados").map_or(true, |v| v != "0"),
     }
 }
 
 /// Regalo de esta persona: el suyo propio si se ha fijado, o el precio general.
 fn regalo_de(p: &Participante, cfg: &Config) -> i64 {
+    if !cfg.usa_regalo {
+        return 0;
+    }
     p.importe_regalo.unwrap_or(cfg.precio_regalo)
 }
 
@@ -973,6 +988,26 @@ fn guardar_config(s: State<AppState>, config: Config) -> Res<()> {
         return Err("Método de pago no válido".into());
     }
     let g = s.db.lock().map_err(e)?;
+    {
+        let db = con(&g)?;
+        let n = |sql: &str| -> i64 { db.query_row(sql, [], |r| r.get(0)).unwrap_or(0) };
+        if !config.usa_homenajeados {
+            let h = n("SELECT COUNT(*) FROM participantes WHERE homenajeado=1");
+            if h > 0 {
+                return Err(format!("Hay {} homenajeado(s): cámbialos de modalidad antes de desactivar los homenajeados", h));
+            }
+        }
+        if !config.usa_regalo {
+            let solo = n("SELECT COUNT(*) FROM participantes WHERE comida=0");
+            let gastos = n("SELECT COUNT(*) FROM gastos");
+            if solo > 0 {
+                return Err(format!("Hay {} persona(s) que solo van al regalo: cámbialas o bórralas antes de quitar el regalo", solo));
+            }
+            if gastos > 0 {
+                return Err(format!("Hay {} gasto(s) del regalo: elimínalos antes de quitar el regalo", gastos));
+            }
+        }
+    }
     let tx = tx_escritura(con(&g)?)?;
     set_key(&tx, "evento", config.evento.trim())?;
     set_key(&tx, "fecha", config.fecha.trim())?;
@@ -980,6 +1015,8 @@ fn guardar_config(s: State<AppState>, config: Config) -> Res<()> {
     set_key(&tx, "precio_comida", &config.precio_comida.to_string())?;
     set_key(&tx, "precio_regalo", &config.precio_regalo.to_string())?;
     set_key(&tx, "metodos_pago", &config.metodos_pago)?;
+    set_key(&tx, "usa_regalo", if config.usa_regalo { "1" } else { "0" })?;
+    set_key(&tx, "usa_homenajeados", if config.usa_homenajeados { "1" } else { "0" })?;
     tx.commit().map_err(e)?;
     Ok(())
 }
@@ -2607,6 +2644,8 @@ mod tests {
             precio_comida: 2000,
             precio_regalo: 1000,
             metodos_pago: "ambos".into(),
+            usa_regalo: true,
+            usa_homenajeados: true,
         };
         let mk = |n: &str, pagado: bool, hom: bool| Participante {
             id: None,

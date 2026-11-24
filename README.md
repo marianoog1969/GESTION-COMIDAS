@@ -145,3 +145,7 @@ Hasta la v0.3 los datos se guardaban en cada equipo (`%APPDATA%\<identificador>\
 ## Métodos de pago
 
 En Parámetros se elige si se cobra con **efectivo y Bizum**, **solo efectivo** o **solo Bizum**. Con un único método desaparece el selector al cobrar y se usa siempre ese.
+
+## Qué incluye el evento
+
+En Parámetros, «Hay regalo» y «Hay homenajeados» se pueden desactivar. Sin regalo solo se gestiona la comida (desaparecen la pestaña de gastos, las columnas y las secciones del PDF del regalo). Sin homenajeados desaparece esa modalidad. No se pueden desactivar mientras existan personas o gastos que dependan de ello.

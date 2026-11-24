@@ -6,6 +6,10 @@ export interface Config {
   precio_regalo: number; // céntimos
   /** Métodos de pago admitidos */
   metodos_pago: "ambos" | "efectivo" | "bizum";
+  /** El evento tiene regalo */
+  usa_regalo: boolean;
+  /** Se admiten homenajeados */
+  usa_homenajeados: boolean;
 }
 
 export interface Participante {
