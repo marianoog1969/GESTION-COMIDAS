@@ -93,6 +93,13 @@ struct Config {
     regalo_desc: String,
     precio_comida: i64,
     precio_regalo: i64,
+    /// Métodos de pago admitidos: "ambos", "efectivo" o "bizum"
+    #[serde(default = "metodos_por_defecto")]
+    metodos_pago: String,
+}
+
+fn metodos_por_defecto() -> String {
+    "ambos".into()
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -388,6 +395,9 @@ fn leer_config(c: &Connection) -> Config {
         precio_regalo: get_key(c, "precio_regalo")
             .and_then(|v| v.parse().ok())
             .unwrap_or(0),
+        metodos_pago: get_key(c, "metodos_pago")
+            .filter(|v| matches!(v.as_str(), "ambos" | "efectivo" | "bizum"))
+            .unwrap_or_else(metodos_por_defecto),
     }
 }
 
@@ -959,6 +969,9 @@ fn guardar_config(s: State<AppState>, config: Config) -> Res<()> {
     if config.precio_comida < 0 || config.precio_regalo < 0 {
         return Err("Los precios no pueden ser negativos".into());
     }
+    if !matches!(config.metodos_pago.as_str(), "ambos" | "efectivo" | "bizum") {
+        return Err("Método de pago no válido".into());
+    }
     let g = s.db.lock().map_err(e)?;
     let tx = tx_escritura(con(&g)?)?;
     set_key(&tx, "evento", config.evento.trim())?;
@@ -966,6 +979,7 @@ fn guardar_config(s: State<AppState>, config: Config) -> Res<()> {
     set_key(&tx, "regalo_desc", config.regalo_desc.trim())?;
     set_key(&tx, "precio_comida", &config.precio_comida.to_string())?;
     set_key(&tx, "precio_regalo", &config.precio_regalo.to_string())?;
+    set_key(&tx, "metodos_pago", &config.metodos_pago)?;
     tx.commit().map_err(e)?;
     Ok(())
 }
@@ -2592,6 +2606,7 @@ mod tests {
             regalo_desc: String::new(),
             precio_comida: 2000,
             precio_regalo: 1000,
+            metodos_pago: "ambos".into(),
         };
         let mk = |n: &str, pagado: bool, hom: bool| Participante {
             id: None,

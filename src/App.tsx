@@ -431,6 +431,9 @@ export default function App() {
     setUltimoCobrador(id);
     guardarLS(LS_COBRADOR, String(id));
   };
+  // Métodos admitidos según Parámetros; si solo hay uno, se usa siempre ese
+  const metodosOk = METODOS.filter((m) => config.metodos_pago === "ambos" || m.id === config.metodos_pago);
+  const metodoActual = metodosOk.some((m) => m.id === ultimoMetodo) ? ultimoMetodo : metodosOk[0].id;
   const elegirMetodo = (m: string) => {
     setUltimoMetodo(m);
     guardarLS(LS_METODO, m);
@@ -514,7 +517,7 @@ export default function App() {
 
   const marcar = (p: Participante, pagado: boolean, importe?: number) => {
     resaltar("p" + p.id);
-    const metodoTxt = METODOS.find((m) => m.id === ultimoMetodo)?.txt ?? "";
+    const metodoTxt = METODOS.find((m) => m.id === metodoActual)?.txt ?? "";
     const quien = nombreCobrador(defCobrador);
     ejecutar(
       async () => {
@@ -529,7 +532,7 @@ export default function App() {
           id: p.id,
           pagado,
           cobradorId: pagado ? defCobrador : null,
-          metodo: pagado ? ultimoMetodo : null,
+          metodo: pagado ? metodoActual : null,
           // Lo que estaba viendo: si otro equipo lo ha cambiado, se rechaza
           desde: p.pagado,
         });
@@ -559,7 +562,7 @@ export default function App() {
       reales.length === 0
         ? null
         : cambios.cobradorId ?? p.cobrador_id ?? defCobrador;
-    const metodo = cambios.metodo ?? p.metodo ?? ultimoMetodo;
+    const metodo = cambios.metodo ?? p.metodo ?? metodoActual;
     ejecutar(() =>
       invoke("marcar_pagado", {
         id: p.id,
@@ -639,7 +642,7 @@ export default function App() {
               id,
               pagado: true,
               cobradorId: defCobrador,
-              metodo: ultimoMetodo,
+              metodo: metodoActual,
               desde: false,
             });
           } catch (err) {
@@ -1113,14 +1116,14 @@ export default function App() {
               ))}
             </select>
           )}
-          {vista === "personas" && (
+          {vista === "personas" && metodosOk.length > 1 && (
           <div className="seg small" role="radiogroup" aria-label="Método de pago">
             {METODOS.map((m) => (
               <button
                 key={m.id}
                 role="radio"
-                aria-checked={ultimoMetodo === m.id}
-                className={ultimoMetodo === m.id ? "on" : ""}
+                aria-checked={metodoActual === m.id}
+                className={metodoActual === m.id ? "on" : ""}
                 onClick={() => elegirMetodo(m.id)}
               >
                 <Icono n={m.ico} /> {m.txt}
@@ -1333,7 +1336,7 @@ export default function App() {
                       )}
                       <CeldaSelect
                         valor={p.metodo}
-                        opciones={METODOS.map((m) => ({ id: m.id, txt: m.txt }))}
+                        opciones={METODOS.filter((m) => metodosOk.some((o) => o.id === m.id) || m.id === p.metodo).map((m) => ({ id: m.id, txt: m.txt }))}
                         etiqueta="Método de pago"
                         falta="¿Cómo?"
                         onChange={(v) => cambiarCobro(p, { metodo: v })}
@@ -1397,7 +1400,7 @@ export default function App() {
           persona={cobroRegalo}
           precioGeneral={config.precio_regalo}
           cobrador={nombreCobrador(defCobrador) ?? ""}
-          metodo={METODOS.find((m) => m.id === ultimoMetodo)?.txt ?? ""}
+          metodo={METODOS.find((m) => m.id === metodoActual)?.txt ?? ""}
           onCancel={() => setCobroRegalo(null)}
           onCobrar={(c, pagado) => {
             const p = cobroRegalo;
@@ -1765,6 +1768,7 @@ function ConfigDialog(props: {
   const [regaloDesc, setRegaloDesc] = useState(props.config.regalo_desc);
   const [comida, setComida] = useState(deCentimos(props.config.precio_comida));
   const [regalo, setRegalo] = useState(deCentimos(props.config.precio_regalo));
+  const [metodos, setMetodos] = useState<Datos["config"]["metodos_pago"]>(props.config.metodos_pago ?? "ambos");
   const [err, setErr] = useState("");
 
   const pc = aCentimos(comida);
@@ -1774,7 +1778,8 @@ function ConfigDialog(props: {
     fecha !== props.config.fecha ||
     regaloDesc !== props.config.regalo_desc ||
     pc !== props.config.precio_comida ||
-    pr !== props.config.precio_regalo;
+    pr !== props.config.precio_regalo ||
+    metodos !== (props.config.metodos_pago ?? "ambos");
 
   const cancelar = () => {
     if (cambiado && !window.confirm("Hay cambios sin guardar. ¿Descartarlos?")) return;
@@ -1843,6 +1848,7 @@ function ConfigDialog(props: {
         regalo_desc: regaloDesc,
         precio_comida: pc,
         precio_regalo: pr,
+        metodos_pago: metodos,
       });
     } catch (e) {
       setErr(String(e));
@@ -1915,6 +1921,32 @@ function ConfigDialog(props: {
           regalo
         </div>
       )}
+
+      <h3 className="sub">Métodos de pago</h3>
+      <p className="muted">
+        Cómo se puede cobrar en este evento. Si eliges uno solo, desaparece el selector al cobrar y
+        se usa siempre ese.
+      </p>
+      <div className="seg" role="radiogroup" aria-label="Métodos de pago admitidos">
+        {(
+          [
+            ["ambos", "Efectivo y Bizum"],
+            ["efectivo", "Solo efectivo"],
+            ["bizum", "Solo Bizum"],
+          ] as const
+        ).map(([id, txt]) => (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={metodos === id}
+            className={metodos === id ? "on" : ""}
+            onClick={() => setMetodos(id)}
+          >
+            {txt}
+          </button>
+        ))}
+      </div>
 
       <h3 className="sub">Tipos de menú</h3>
       <p className="muted">

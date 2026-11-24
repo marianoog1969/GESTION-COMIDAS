@@ -4,6 +4,8 @@ export interface Config {
   regalo_desc: string;
   precio_comida: number; // céntimos
   precio_regalo: number; // céntimos
+  /** Métodos de pago admitidos */
+  metodos_pago: "ambos" | "efectivo" | "bizum";
 }
 
 export interface Participante {
